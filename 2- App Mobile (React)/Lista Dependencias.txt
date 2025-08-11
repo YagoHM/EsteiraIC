@@ -1,0 +1,9 @@
+
+pip install flask-cors
+npx expo install @react-native-async-storage/async-storage
+pip install paho-mqtt
+npx expo install expo-sharing
+npm install pdf-lib@1.17.1
+npm install tslib
+
+npx expo start --clear

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Webcam Viewer</title>
+  <style>
+    body { text-align: center; font-family: sans-serif; margin-top: 50px; }
+    img { max-width: 90%; border: 2px solid #333; }
+  </style>
+</head>
+<body>
+  <h1>Imagem da Webcam</h1>
+  <img src="captura.jpg" id="webcam" />
+  <script>
+    setInterval(() => {
+      const img = document.getElementById("webcam");
+      img.src = "captura.jpg?rand=" + Math.random(); // força o navegador a recarregar
+    }, 1000); // atualiza a cada 1 segundo
+  </script>
+</body>
+</html>

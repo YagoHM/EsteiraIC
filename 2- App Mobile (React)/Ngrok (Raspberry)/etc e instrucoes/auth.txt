@@ -1,0 +1,7 @@
+ngrok.exe config add-authtoken 2wNhqWx8JwAhD4O1nxxqJVvtpEB_prCM4myKWKcHd8rpjXmX
+
+rimraf node_modules .expo .expo-shared
+Remove-Item -Force package-lock.json,yarn.lock
+npm install
+
+limpar o projeto

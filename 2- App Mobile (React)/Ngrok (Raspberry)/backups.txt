@@ -1,0 +1,207 @@
+from flask import Flask, send_file
+import cv2
+import time
+import threading
+import os
+
+app = Flask(__name__)
+
+caminho_imagem = os.path.abspath("captura.jpg")
+
+def capturar_imagem():
+    cap = cv2.VideoCapture(0)
+    while True:
+        ret, frame = cap.read()
+        if ret:
+            cv2.imwrite(caminho_imagem, frame)
+        time.sleep(1)
+    cap.release()
+
+threading.Thread(target=capturar_imagem, daemon=True).start()
+
+@app.route("/captura.jpg")
+def imagem():
+    if os.path.exists(caminho_imagem):
+        return send_file(caminho_imagem, mimetype="image/jpeg")
+    return "Imagem não encontrada", 404
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+
+
+
+---
+
+
+import { informacoesMqtt } from '@/hooks/useMqtt'; // hook MQTT
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Image, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+
+export default function Camera() {
+  const { ultimaMsg, ngrokRefresh } = informacoesMqtt("ngrok/ip","ngrok/refresh"); 
+  const [serverUrl, setServerUrl] = useState('');
+  const [timestamp, setTimestamp] = useState(Date.now());
+  const [loading, setLoading] = useState(true);
+
+  // Carrega URL salva no AsyncStorage quando o componente monta
+  useEffect(() => {
+    async function loadUrl() {
+      const savedUrl = await AsyncStorage.getItem('@serverUrl');
+      if (savedUrl) {
+        setServerUrl(savedUrl);
+      }
+      setLoading(false);
+    }
+    loadUrl();
+  }, []);
+
+  // Atualiza o timestamp a cada 1s para forçar atualização da imagem
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimestamp(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Quando a mensagem MQTT chega, atualiza URL e salva no AsyncStorage
+  useEffect(() => {
+    if (ultimaMsg) {
+      setServerUrl(ultimaMsg);
+      AsyncStorage.setItem('@serverUrl', ultimaMsg);
+    }
+  }, [ultimaMsg]);
+//Cross-Origin Read Blocking (CORB) blocked a cross-origin response.
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center' }]}>
+      <ActivityIndicator size="large" color="#0000ff" />
+        <Text style={{ marginTop: 10 }}>Carregando URL do servidor...</Text>
+      </View>
+    );
+  }
+
+  if (!serverUrl) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center' }]}>
+        <Text>Nenhuma URL disponível ainda.</Text>
+      </View>
+    );
+  }
+
+  const imageUrl = `${serverUrl}/captura.jpg?t=${timestamp}`;
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.label}>URL do servidor (ngrok):</Text>
+      <TextInput
+        style={styles.input}
+        value={serverUrl}
+        placeholder="Esperando a URL do servidor..."
+        editable={false}
+      />
+
+      {Platform.OS === 'web' ? (
+        <Image source={{ uri: imageUrl}} style={styles.image} alt="Imagem da câmera" />
+      ) : (
+        <Image source={{ uri: imageUrl }} style={styles.image} />
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  label: {
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    width: '100%',
+    padding: 10,
+    marginBottom: 20,
+    borderRadius: 5,
+  },
+  image: {
+    width: 500,
+    height: 300,
+    resizeMode: 'contain',
+  },
+});
+
+--
+
+from flask import Flask, Response
+import cv2
+
+app = Flask(__name__)
+
+def gerar_frames():
+    camera = cv2.VideoCapture(0)  # 0 = primeira webcam do sistema
+
+    while True:
+        sucesso, frame = camera.read()
+        if not sucesso:
+            break
+
+        # Codifica o frame como JPEG
+        ret, buffer = cv2.imencode('.jpg', frame)
+        frame = buffer.tobytes()
+
+        # Monta o frame no formato MJPEG
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+@app.route('/video')
+def video():
+    return Response(gerar_frames(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+
+--
+
+setlocal
+
+:: Instalações de dependências
+npx expo upgrade
+pip install opencv-python flask numpy
+pip install requests
+pip install --upgrade pip
+pip install flask
+pip install opencv-python
+pip install urllib3
+pip install paho-mqtt
+pip install --upgrade paho-mqtt
+pip install flask-cors
+
+
+:: Inicia o servidor Flask - Enviar imagens local e depois passa pro ngrok
+start "" python server.py
+
+:: Espera o servidor iniciar
+timeout /t 10 /nobreak > nul
+
+:: Configura o ngrok
+start "" ngrok.exe config add-authtoken 2wNhqWx8JwAhD4O1nxxqJVvtpEB_prCM4myKWKcHd8rpjXmX
+
+:: Abre o túnel
+start "" ngrok.exe http 5000
+
+:: Espera o túnel estar pronto
+timeout /t 15 /nobreak > nul
+
+:: Envia a info via MQTT
+start "" python enviar_info.py
+
+endlocal
+pause

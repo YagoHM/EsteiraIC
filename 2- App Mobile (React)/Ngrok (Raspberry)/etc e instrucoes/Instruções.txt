@@ -1,0 +1,107 @@
+===== Passo a passo para rodar câmera com Python + React Native (Web e Mobile) =====
+
+1) Arquivo Python: server.py
+
+- Função: captura foto da webcam, salva como captura.jpg e serve via Flask.
+- Código básico:
+
+from flask import Flask, send_file
+import cv2
+import time
+import threading
+
+app = Flask(__name__)
+
+def capturar_imagem():
+    cap = cv2.VideoCapture(0)
+    while True:
+        ret, frame = cap.read()
+        if ret:
+            cv2.imwrite("captura.jpg", frame)
+        time.sleep(1)
+    cap.release()
+
+threading.Thread(target=capturar_imagem, daemon=True).start()
+
+@app.route("/captura.jpg")
+def imagem():
+    return send_file("captura.jpg", mimetype="image/jpeg")
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+
+
+2) Instalar dependências Python:
+
+pip install flask opencv-python
+
+
+3) Expor servidor para internet (escolha um):
+
+a) LocalTunnel (não precisa criar conta)
+- Instalar: npm install -g localtunnel
+- Rodar: npx localtunnel --port 5000
+- Vai gerar URL tipo: https://xxxx.loca.lt
+
+b) Ngrok (precisa criar conta e token)
+- Baixar ngrok
+- Rodar: ngrok http 5000
+- Usar URL gerada
+
+
+4) React Native (web e mobile) - Arquivo Camera.tsx
+
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, View, Platform, Image } from 'react-native';
+
+const Camera = () => {
+  const baseUrl = 'https://SEU-LINK.aqui/captura.jpg'; // URL do túnel
+  const [timestamp, setTimestamp] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimestamp(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const imageUrl = `${baseUrl}?t=${timestamp}`;
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.container}>
+        <img src={imageUrl} style={styles.image} alt="Imagem da câmera" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <Image source={{ uri: imageUrl }} style={styles.image} />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  image: {
+    height: 400,
+    width: '100%',
+    resizeMode: 'contain',
+  },
+});
+
+export default Camera;
+
+
+===== Resumo rápido =====
+
+- pip install flask opencv-python
+- python server.py
+- npx localtunnel --port 5000 (ou ngrok http 5000)
+- No React Native, usar URL gerada para mostrar imagem atualizada

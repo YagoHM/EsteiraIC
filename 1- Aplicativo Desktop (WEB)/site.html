@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT com HiveMQ</title>
+    <!--Hive MQTT--> <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script> 
+    <!--Bootstrap--> <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <!--Bootstrap--> <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>                                                                                                                    
+    <!--Funções--> <script src="script.js"></script>
+    <link href="checkboxCss.css" rel="stylesheet">
+</head>
+<body>
+
+
+    <div class = "container d-flex flex-column align-items-center vh-100">
+
+        <!--Card Liga/Desliga-->
+
+        <div class="card" style="width: 18rem; margin-top: 1rem;" >
+            <img src="img_esteira.jpg" class="card-img-top" alt=""></img>
+            <div class="card-body">
+                <h5 class="card-title">Status do Serviço: <span id="status_esteira">OFFLINE</span></h5>
+                <p class="card-text">Vermelho: <span id="qtd_vermelho">0</span></p>
+                <p class="card-text">Azul: <span id="qtd_azul">0</span></p>
+                <p class="card-text">Verde: <span id="qtd_verde">0</span></p>   
+                <p class="card-text">Outros: <span id="qtd_outro">0</span></p>   
+    
+                <div class="customCheckBoxHolder">
+                    <input type="checkbox" id="cCB1" class="customCheckBoxInput" enabled="false" onclick="ligaDesliga()">
+                    <label for="cCB1" class="customCheckBoxWrapper">
+                        <div class="customCheckBox">
+                            <div class="inner" id="checkBoxLigaDesliga">Ligar</div>
+                        </div>
+                    </label>
+                </div>  
+    
+            </div>
+        </div>
+
+        <!-- Card para Teste -->
+
+        <div class="text-center my-2">
+            <h2>Mensagem Recebida:</h2>
+            <p id="mensagem">Aguardando...</p>
+            <div class="input-group mb-3">
+                <input type="text" id="inputEnviar" class="form-control" placeholder="Digite algo...">
+                <button class="btn btn-primary" type="button" onclick="enviarMensagem()">Enviar</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
