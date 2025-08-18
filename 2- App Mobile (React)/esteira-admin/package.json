@@ -19,6 +19,7 @@
     "@tensorflow-models/coco-ssd": "^2.2.3",
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-react-native": "^1.0.0",
+    "dom-to-image": "^2.6.0",
     "expo": "~53.0.20",
     "expo-blur": "~14.1.5",
     "expo-camera": "^16.1.11",

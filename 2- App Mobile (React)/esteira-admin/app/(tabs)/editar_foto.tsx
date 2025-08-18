@@ -5,6 +5,7 @@ import EmojiPicker from "@/components/emojiPicker";
 import EmojiSticker from "@/components/emojiSticker";
 import IconButton from "@/components/iconButton";
 import ImageViewer from "@/components/imageViewer";
+import { any } from "@tensorflow/tfjs";
 import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
 import React, { useRef, useState } from "react";
@@ -12,7 +13,7 @@ import { ImageSourcePropType, Platform, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import ViewShot, { captureRef } from "react-native-view-shot";
 
-const PlaceholderImage = require("@/assets/images/placeholder-modal.jpg");
+const PlaceholderImage = require("@/assets/images/placeHolder.jpg");
 
 // Só carrega html2canvas em web para não inflar bundle nativo
 let html2canvas: typeof import("html2canvas") | null = null;
@@ -62,7 +63,7 @@ export default function Index() {
     if (Platform.OS !== "web") {
       try {
         const localUri = await captureRef(nativeRef, {
-          height: auto,
+          height: any,
           quality: 1,
           format: "jpeg",
         });
