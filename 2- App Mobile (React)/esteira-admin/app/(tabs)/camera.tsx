@@ -1,43 +1,32 @@
-import { informacoesMqtt } from '@/hooks/useMqtt'; // hook MQTT
+import { informacoesMqtt } from '@/hooks/useMqtt';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
-} from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { WebView } from 'react-native-webview';
 
 export default function Camera() {
-  const { ultimaMsg, ngrokRefresh } = informacoesMqtt("ngrok/ip","ngrok/refresh");  
-   const [serverUrl, setServerUrl] = useState('http://127.0.0.1:5000');
+  const { ultimaMsg } = informacoesMqtt("ngrok/ip", "ngrok/refresh");
+  const [serverUrl, setServerUrl] = useState('http://127.0.0.1:5000');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  // Carrega URL salva no AsyncStorage ao montar
   useEffect(() => {
     async function loadUrl() {
       const savedUrl = await AsyncStorage.getItem('@serverUrl');
-      if (savedUrl) {
-        setServerUrl(savedUrl);
-      }
+      if (savedUrl) setServerUrl(savedUrl);
       setLoading(false);
     }
     loadUrl();
   }, []);
 
-  // Atualiza URL quando chega uma nova pelo MQTT
   useEffect(() => {
     if (ultimaMsg) {
       setServerUrl(ultimaMsg);
       AsyncStorage.setItem('@serverUrl', ultimaMsg);
-      setError(false); // Resetar erro se veio uma nova URL
+      setError(false);
     }
   }, [ultimaMsg]);
 
-  // Função para montar URL correta
   const streamUrl = serverUrl.endsWith('/video') ? serverUrl : `${serverUrl}/video`;
 
   if (loading) {
@@ -67,14 +56,25 @@ export default function Camera() {
         editable={false}
       />
 
-
       {error ? (
-        <Text style={{ color: 'red' }}>Erro ao carregar a câmera</Text>
+        <Text style={{ color: 'red' }}>Erro ao carregar o vídeo</Text>
+      ) : Platform.OS === 'web' ? (
+        // Para web: iframe funciona melhor
+        <iframe
+          src={streamUrl}
+          style={{ width: '100%', height: 300, border: 'none' }}
+        />
       ) : (
-        <Image
+        // Para mobile: WebView
+        <WebView
           source={{ uri: streamUrl }}
-          style={styles.image}
-          onError={() => setError(true)}
+          style={styles.video}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          onError={(e) => {
+            console.log("Erro no vídeo:", e.nativeEvent);
+            setError(true);
+          }}
         />
       )}
     </View>
@@ -82,30 +82,8 @@ export default function Camera() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-  },
-  label: {
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    width: '100%',
-    padding: 10,
-    marginBottom: 20,
-    borderRadius: 5,
-  },
-  image: {
-    width: 500,
-    height: 300,
-    resizeMode: 'contain',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-  },
+  container: { flex: 1, padding: 20, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  label: { fontSize: 16, marginBottom: 8 },
+  input: { borderWidth: 1, borderColor: '#ccc', width: '100%', padding: 10, marginBottom: 20, borderRadius: 5 },
+  video: { width: '100%', height: 300, backgroundColor: '#000', borderRadius: 8 },
 });
