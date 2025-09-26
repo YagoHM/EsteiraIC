@@ -1,4 +1,3 @@
-import RefreshNgrok from '@/components/refreshNgrok';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Tabs } from 'expo-router';
 import React from 'react';
@@ -48,7 +47,7 @@ export default function TabLayout() {
         options={{
           title: 'Câmera',
           tabBarIcon: ({ color }) => <IconSymbol size={16} name="camera.fill" color={color} />,
-          headerRight: () => <RefreshNgrok></RefreshNgrok>,
+          //headerRight: () => <RefreshNgrok></RefreshNgrok>,
         }}
       />
       <Tabs.Screen

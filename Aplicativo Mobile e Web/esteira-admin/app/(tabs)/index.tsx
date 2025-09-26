@@ -13,16 +13,17 @@ export default function HomeScreen() {
   } = informacoesMqtt();
   const PlaceholderImage = require('@/assets/images/placeholder-modal.jpg');
 
- //       <TouchableOpacity style={styles.button} onPress={gerarPdf} disabled={pdfLoading}>
-  //      <Text style={styles.buttonText}>
-   //       {pdfLoading ? 'Gerando...' : 'Gerar Relatório'}
-    //    </Text>
-   //   </TouchableOpacity>
-  //const { gerarPdf, loading: pdfLoading } = useGeneratePdf(logs, verde, azul, vermelho, corndef);
 
   return (
     <View style={styles.container}>
       <MqttPainel />
+             {/* <TouchableOpacity style={styles.button} onPress={gerarPdf} disabled={pdfLoading}>
+       <Text style={styles.buttonText}>
+         {pdfLoading ? 'Gerando...' : 'Gerar Relatório'}
+       </Text>
+     </TouchableOpacity>
+  const { gerarPdf, loading: pdfLoading } = useGeneratePdf(logs, verde, azul, vermelho, corndef); */}
+
     </View>
   );
 }

@@ -1,0 +1,298 @@
+# 🎥 Sistema de Streaming de Câmera - Instruções Completas
+
+## 📋 Visão Geral
+Sistema que substitui o ngrok por conexão TCP/IP local, usando MQTT para descoberta automática de IP.
+
+---
+
+## 🔧 **PARA RASPBERRY PI (Servidor Principal)**
+
+### 1. Preparação do Sistema
+```bash
+# Atualize o sistema
+sudo apt update && sudo apt upgrade -y
+
+# Instale Python e pip se não estiverem instalados
+sudo apt install python3 python3-pip -y
+
+# Instale as dependências
+pip3 install opencv-python flask flask-cors paho-mqtt numpy
+
+# Para Raspberry Pi, pode precisar de:
+sudo apt install python3-opencv -y
+```
+
+### 2. Configuração da Câmera
+```bash
+# Ative a câmera do Raspberry Pi
+sudo raspi-config
+# Vá em "Interfacing Options" > "Camera" > "Enable"
+
+# Teste a câmera
+raspistill -o test.jpg
+
+# Se usar câmera USB, verifique se é reconhecida
+lsusb
+```
+
+### 3. Instalação do Servidor
+```bash
+# Crie um diretório para o projeto
+mkdir ~/camera_server
+cd ~/camera_server
+
+# Salve o código Python como "servidor_raspberry.py"
+# (copie o código do primeiro artefato)
+
+# Torne o arquivo executável
+chmod +x servidor_raspberry.py
+```
+
+### 4. Execução
+```bash
+# Execute o servidor
+python3 servidor_raspberry.py
+
+# Ou execute em background
+nohup python3 servidor_raspberry.py &
+
+# Para parar (se rodando em background)
+pkill -f servidor_raspberry.py
+```
+
+### 5. Auto-inicialização (Opcional)
+```bash
+# Crie um serviço systemd
+sudo nano /etc/systemd/system/camera-server.service
+```
+
+**Conteúdo do arquivo:**
+```ini
+[Unit]
+Description=Camera Server
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/camera_server/servidor_raspberry.py
+Restart=always
+User=pi
+Group=pi
+Environment=PATH=/usr/bin:/usr/local/bin
+Environment=PYTHONPATH=/usr/lib/python3/dist-packages
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+# Ative o serviço
+sudo systemctl daemon-reload
+sudo systemctl enable camera-server
+sudo systemctl start camera-server
+
+# Verifique status
+sudo systemctl status camera-server
+```
+
+---
+
+## 💻 **PARA PC (Testes)**
+
+### 1. Instalação Python (Windows/Mac/Linux)
+```bash
+# Windows: Baixe Python 3.8+ de python.org
+# Mac: brew install python3
+# Linux: sudo apt install python3 python3-pip
+
+# Instale dependências
+pip install opencv-python flask flask-cors paho-mqtt numpy
+```
+
+### 2. Execução
+```bash
+# Salve o código como "servidor_pc.py"
+# Execute:
+python servidor_pc.py
+```
+
+---
+
+## 📱 **CONFIGURAÇÃO DO APP REACT NATIVE**
+
+### 1. Substitua o arquivo Camera.tsx
+- Substitua seu arquivo atual pelo código do terceiro artefato
+- Mantém compatibilidade com web e mobile
+
+### 2. Dependências (se não instaladas)
+```bash
+npm install @react-native-async-storage/async-storage
+npm install react-native-webview
+```
+
+---
+
+## 🌐 **CONFIGURAÇÃO DE REDE**
+
+### 1. Descobrir IP Local
+```bash
+# Windows
+ipconfig
+
+# Mac/Linux
+ifconfig
+# ou
+ip addr show
+```
+
+### 2. Teste de Conectividade
+```bash
+# Do seu celular/computador, teste:
+# Substitua 192.168.1.XXX pelo IP do servidor
+curl http://192.168.1.XXX:5000/status
+
+# Ou abra no navegador:
+http://192.168.1.XXX:5000/video
+```
+
+### 3. Firewall (Se necessário)
+```bash
+# Windows - Permita porta 5000
+# Linux/Raspberry Pi
+sudo ufw allow 5000
+```
+
+---
+
+## 🚀 **COMO USAR**
+
+### 1. Iniciar o Sistema
+1. **Execute o servidor** (Raspberry Pi ou PC)
+   ```bash
+   python3 servidor_raspberry.py
+   # ou
+   python servidor_pc.py
+   ```
+
+2. **Abra o app** React Native
+   - O IP será enviado automaticamente via MQTT
+   - Aguarde alguns segundos para conexão
+
+3. **Se não conectar automaticamente:**
+   - Toque em "Manual" no app
+   - Digite o IP do servidor (ex: `192.168.1.100`)
+   - Toque "Conectar"
+
+### 2. Verificar Conexão
+- O app mostra status do servidor
+- Verde = funcionando, Vermelho = problema
+- Pull-to-refresh para atualizar
+
+### 3. Solução de Problemas
+
+**Problema: "Não conecta"**
+```bash
+# Verifique se o servidor está rodando
+ps aux | grep servidor
+
+# Teste conexão local no servidor
+curl http://localhost:5000/status
+
+# Verifique firewall
+sudo ufw status
+```
+
+**Problema: "Câmera não funciona"**
+```bash
+# Teste câmera diretamente
+python3 -c "import cv2; print(cv2.VideoCapture(0).isOpened())"
+
+# Para Raspberry Pi
+vcgencmd get_camera
+
+# Verifique permissões
+sudo usermod -a -G video $USER
+```
+
+**Problema: "MQTT não conecta"**
+- Verifique credenciais no código
+- Teste conexão internet
+- Firewall pode bloquear porta 8883
+
+---
+
+## 📊 **MONITORAMENTO**
+
+### Ver Logs do Servidor
+```bash
+# Se rodando em primeiro plano, veja no terminal
+# Se rodando como serviço:
+sudo journalctl -u camera-server -f
+
+# Logs do sistema
+tail -f /var/log/syslog | grep camera
+```
+
+### Endpoints Úteis
+- `http://IP:5000/video` - Stream da câmera
+- `http://IP:5000/status` - Status do servidor
+- `http://IP:5000/stop` - Para streaming
+- `http://IP:5000/toggle_test` - Modo teste (só PC)
+
+---
+
+## 🔧 **PERSONALIZAÇÃO**
+
+### Mudar Qualidade do Vídeo
+No código Python, altere:
+```python
+# Resolução
+camera.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)  # Era 640
+camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)  # Era 480
+
+# Qualidade JPEG
+cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 95])  # Era 85
+```
+
+### Mudar Porta
+```python
+app.run(host='0.0.0.0', port=8080)  # Era 5000
+```
+
+### Configurar Tópicos MQTT Diferentes
+No código, altere:
+```python
+MQTT_TOPIC_IP = "seu/topico/ip"
+MQTT_TOPIC_REFRESH = "seu/topico/refresh"
+```
+
+---
+
+## ✅ **CHECKLIST DE FUNCIONAMENTO**
+
+- [ ] Python 3.8+ instalado
+- [ ] Dependências instaladas (opencv, flask, etc.)
+- [ ] Câmera funcionando (teste separado)
+- [ ] Servidor rodando (porta 5000 livre)
+- [ ] Mesma rede Wi-Fi (servidor e app)
+- [ ] Firewall liberado (porta 5000)
+- [ ] MQTT conectando (internet funcionando)
+- [ ] App React Native atualizado
+
+---
+
+## 🆘 **SUPORTE**
+
+Se tiver problemas:
+
+1. **Verifique logs** dos servidores
+2. **Teste conexão** com curl ou navegador
+3. **Confirme rede** - mesmo Wi-Fi
+4. **Teste MQTT** - conexão internet OK
+5. **Reinicie** servidor e app
+
+**IPs comuns de exemplo:**
+- `192.168.1.XXX` (redes domésticas)
+- `192.168.0.XXX` (algumas redes)
+- `10.0.0.XXX` (algumas redes corporativas)
+
+O sistema agora funciona completamente local, sem necessidade do ngrok! 🎉

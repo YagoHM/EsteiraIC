@@ -1,0 +1,9 @@
+# Método simples
+python camera_server.py
+
+# Com parâmetros personalizados
+python camera_server.py [camera_index] [port]
+
+# Exemplos:
+python camera_server.py 0 5000    # Câmera 0, porta 5000
+python camera_server.py 1 8000    # Câmera 1, porta 8000

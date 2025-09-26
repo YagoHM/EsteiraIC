@@ -5,7 +5,6 @@ import EmojiPicker from "@/components/emojiPicker";
 import EmojiSticker from "@/components/emojiSticker";
 import IconButton from "@/components/iconButton";
 import ImageViewer from "@/components/imageViewer";
-import { any } from "@tensorflow/tfjs";
 import * as ImagePicker from "expo-image-picker";
 import * as MediaLibrary from "expo-media-library";
 import React, { useRef, useState } from "react";
@@ -38,7 +37,7 @@ export default function Index() {
     });
 
     if (!result.canceled) {
-      setSelectedImage(result.assets[0].uri);
+      setSelectedImage(rresult.assets[0].uri);
       setShowAppOptions(true);
     } else {
       alert("You did not select any image.");
