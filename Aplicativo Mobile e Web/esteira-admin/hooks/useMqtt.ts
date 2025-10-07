@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 
 type LogEntry = { time: string; value: string };
 
-export function informacoesMqtt(topicoPadraoReceber: string = 'esp32/placa_esp', topicoPadraoEnviar: string = "esp32/site") {
+export function informacoesMqtt(topicoPadraoReceber: string = 'dados/camera', topicoPadraoEnviar: string = "dados/app") {
   const [client, setClient] = useState<Client | null>(null);
   const [message, setMessage] = useState('');
   const [estado, setEstado] = useState(0);
@@ -45,10 +45,10 @@ export function informacoesMqtt(topicoPadraoReceber: string = 'esp32/placa_esp',
       setLogs(prev => [...prev, { time, value: p }]);
       setUltimaMsg(p);
 
-      if (p === '4') setVermelho(v => v + 1);
-      else if (p === '2') setVerde(v => v + 1);
-      else if (p === '3') setAzul(v => v + 1);
-      else if (p === '5') setCorNDef(v => v + 1);
+      if (p === 'Cor:Vermelho') setVermelho(v => v + 1);
+      else if (p === 'Cor:Verde') setVerde(v => v + 1);
+      else if (p === 'Cor:Azul') setAzul(v => v + 1);
+      else if (p === 'Cor:CorNDef') setCorNDef(v => v + 1);
     };
 
     return () => mqttClient.disconnect();

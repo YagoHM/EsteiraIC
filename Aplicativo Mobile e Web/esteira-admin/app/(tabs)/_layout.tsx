@@ -42,14 +42,14 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={16} name="paperplane.fill" color={color} />,
         }}
       />
-      <Tabs.Screen
+      {/* <Tabs.Screen
         name="camera"
         options={{
           title: 'Câmera',
           tabBarIcon: ({ color }) => <IconSymbol size={16} name="camera.fill" color={color} />,
           //headerRight: () => <RefreshNgrok></RefreshNgrok>,
         }}
-      />
+      /> */}
       <Tabs.Screen
         name="editar_foto"
         options={{
