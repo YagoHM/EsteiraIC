@@ -63,6 +63,27 @@ def get_local_ip():
     return ip
 
 # ==============================
+# FUNÇÃO PARA RESPONDER COM IP
+# ==============================
+SOLICITAR_IP_TOPIC = "dados/solicitar_ip"
+ENVIAR_IP_TOPIC = "dados/enviar_ip"
+
+def on_message(client, userdata, msg):
+    topic = msg.topic
+    payload = msg.payload.decode()
+    print(f"[MQTT] Mensagem recebida: {topic} -> {payload}")
+
+    if topic == SOLICITAR_IP_TOPIC:
+        ip = get_local_ip()
+        msg_to_send = f"http://{ip}:5000"
+        client.publish(ENVIAR_IP_TOPIC, msg_to_send)
+        print(f"[MQTT] Enviando IP: {msg_to_send}")
+
+# Registra callback
+client.on_message = on_message
+client.subscribe(SOLICITAR_IP_TOPIC)
+
+# ==============================
 # STREAM NORMAL
 # ==============================
 def generate_normal():

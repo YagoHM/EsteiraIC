@@ -14,12 +14,17 @@ import { WebView } from "react-native-webview";
 import MqttPainel from "@/components/mqttPainel";
 import useGeneratePdf from "@/hooks/usePdf";
 import { informacoesMqtt } from "@/hooks/useMqtt";
+
 export default function CameraScreen() {
-  const [ip, setIp] = useState("http://192.168.0.100:5000");
+  const PADRAO_IP = "http://10.153.0.116:5000";
+
+  const [ip, setIp] = useState(PADRAO_IP);
   const [start, setStart] = useState(false);
   const [useIa, setUseIa] = useState(false);
+
   const isWeb = Platform.OS === "web";
   const { width } = Dimensions.get("window");
+
   const {
     loading,
     estado,
@@ -31,25 +36,42 @@ export default function CameraScreen() {
     logs,
     alterarEstadoEsteira,
   } = informacoesMqtt();
-  // Endpoints da câmera
-  const cameraNormal = `${ip}/camera_normal`;
-  const cameraIa = `${ip}/camera_ia`;
+
+  // adiciona automaticamente a porta 5000 se não tiver
+  const formattedIp = ip.includes(":") ? ip : ip + ":5000";
+
+  const cameraNormal = `${formattedIp}/camera_normal`;
+  const cameraIa = `${formattedIp}/camera_ia`;
   const currentIp = useIa ? cameraIa : cameraNormal;
-  const {gerarPdf, loading: pdfLoading } = useGeneratePdf(logs, verde, azul, vermelho, corndef);
+
+  const { gerarPdf, loading: pdfLoading } = useGeneratePdf(
+    logs,
+    verde,
+    azul,
+    vermelho,
+    corndef
+  );
+
+  const resetIp = () => setIp(PADRAO_IP);
 
   return (
     <View style={styles.container}>
-      {/* Painel MQTT sempre visível */}
+      {/* Painel MQTT */}
       <View style={styles.mqttContainer}>
         <MqttPainel />
       </View>
 
-      <TouchableOpacity style={styles.button} onPress={gerarPdf} disabled={pdfLoading}>
+      {/* Botão PDF */}
+      <TouchableOpacity
+        style={styles.button}
+        onPress={gerarPdf}
+        disabled={pdfLoading}
+      >
         <Text style={styles.buttonText}>
-          {pdfLoading ? 'Gerando...' : 'Gerar Relatório'}
+          {pdfLoading ? "Gerando..." : "Gerar Relatório"}
         </Text>
       </TouchableOpacity>
-      
+
       {!start ? (
         <View style={styles.form}>
           <Text style={styles.label}>IP da câmera:</Text>
@@ -68,6 +90,10 @@ export default function CameraScreen() {
           >
             <Text style={styles.buttonText}>Conectar</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity style={styles.resetButton} onPress={resetIp}>
+            <Text style={styles.resetButtonText}>Resetar IP</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.streamContainer}>
@@ -77,25 +103,22 @@ export default function CameraScreen() {
             <Switch value={useIa} onValueChange={setUseIa} />
           </View>
 
-          {/* Stream */}
-          {isWeb ? (
-            <iframe
-              src={currentIp}
-              style={{
-                width: width - 40,
-                height: 400,
-                borderRadius: 10,
-                border: "none",
-                marginBottom: 20,
-              }}
-            />
-          ) : (
-            <WebView
-              source={{ uri: currentIp }}
-              style={styles.webview}
-            />
-          )}
-          <TouchableOpacity style={styles.backButton} onPress={() => setStart(false)}>
+          {/* Stream centralizada */}
+          <View style={styles.webviewWrapper}>
+            {isWeb ? (
+              <iframe
+                src={currentIp}
+                style={styles.webviewIframe}
+              />
+            ) : (
+              <WebView source={{ uri: currentIp }} style={styles.webview} />
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => setStart(false)}
+          >
             <Text style={styles.backButtonText}>Voltar</Text>
           </TouchableOpacity>
         </View>
@@ -109,7 +132,7 @@ const { width } = Dimensions.get("window");
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff", // tela toda branca
+    backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "flex-start",
     padding: 20,
@@ -155,11 +178,35 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+  resetButton: {
+    backgroundColor: "#6c757d",
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 10,
+    width: "100%",
+    alignItems: "center",
+  },
+  resetButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
   streamContainer: {
     flex: 1,
     width: "100%",
     alignItems: "center",
-    justifyContent: "center", // centraliza a câmera
+    justifyContent: "center",
+  },
+  switchContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "80%",
+    marginBottom: 15,
+  },
+  webviewWrapper: {
+    width: "100%",
+    alignItems: "center", // centraliza
+    justifyContent: "center",
   },
   webview: {
     width: width - 40,
@@ -167,6 +214,17 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: "hidden",
     marginBottom: 20,
+    alignSelf: "center",
+  },
+  webviewIframe: {
+    width: width - 40,
+    height: 400,
+    borderRadius: 10,
+    border: "none",
+    marginBottom: 20,
+    display: "block",
+    marginLeft: "auto",
+    marginRight: "auto",
   },
   backButton: {
     backgroundColor: "#dc3545",
@@ -180,12 +238,5 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
-  },
-  switchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    width: "80%",
-    marginBottom: 15,
   },
 });
