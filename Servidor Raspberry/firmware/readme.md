@@ -1,6 +1,7 @@
 ==============================
 INSTRUÇÕES DE INSTALAÇÃO - RASPBERRY PI
 =======================================
+deb http://raspbian.raspberrypi.org/raspbian/ bookworm main contrib non-free rpi
 
 # 1️⃣ Atualizar o sistema
 
