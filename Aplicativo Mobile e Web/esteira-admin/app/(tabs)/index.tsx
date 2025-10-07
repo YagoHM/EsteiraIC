@@ -60,7 +60,7 @@ export default function CameraScreen() {
     return formatted;
   };
 
-  // Solicita IP via MQTT - agora recebe em dados/camera
+  // Solicita IP via MQTT
   const solicitarIpViaMqtt = () => {
     if (!client || !client.connected) {
       Alert.alert(
@@ -72,27 +72,26 @@ export default function CameraScreen() {
 
     setSolicitandoIp(true);
 
+    // Subscreve ao tópico de resposta
+    const ENVIAR_IP_TOPIC = "dados/enviar_ip";
     const SOLICITAR_IP_TOPIC = "dados/solicitar_ip";
-    const CAMERA_TOPIC = "dados/camera"; // Agora recebe no mesmo tópico das cores
     
     console.log("[MQTT] Iniciando solicitação de IP...");
-    console.log("[MQTT] Aguardando resposta em:", CAMERA_TOPIC);
-    console.log("[MQTT] Publicando em:", SOLICITAR_IP_TOPIC);
+    console.log("[MQTT] Inscrevendo em:", ENVIAR_IP_TOPIC);
     
+    // Variável para controlar o timeout
     let timeoutId: NodeJS.Timeout;
-    let ipRecebido = false;
     
     const handleMessage = (topic: string, message: any) => {
+      // Converte message para string
       const payload = typeof message === 'string' ? message : message.toString();
       
       console.log("[MQTT] Mensagem recebida:");
       console.log("[MQTT] - Tópico:", topic);
       console.log("[MQTT] - Payload:", payload);
       
-      // Verifica se é uma resposta de IP (começa com http)
-      if (topic === CAMERA_TOPIC && payload.startsWith("http") && !ipRecebido) {
-        ipRecebido = true;
-        console.log("[MQTT] ✓ IP detectado:", payload);
+      if (topic === ENVIAR_IP_TOPIC) {
+        console.log("[MQTT] ✓ IP recebido:", payload);
         
         clearTimeout(timeoutId);
         setIp(payload);
@@ -107,50 +106,55 @@ export default function CameraScreen() {
         // Remove o listener
         try {
           client.removeListener("message", handleMessage);
+          client.unsubscribe(ENVIAR_IP_TOPIC);
         } catch (e) {
           console.log("[MQTT] Erro ao remover listener:", e);
         }
       }
     };
 
-    // Adiciona listener (o tópico dados/camera já está subscrito)
+    // Adiciona listener
     client.on("message", handleMessage);
     
-    // Aguarda 500ms e então publica a solicitação
-    setTimeout(() => {
-      console.log("[MQTT] >>> Publicando 'request_ip' em:", SOLICITAR_IP_TOPIC);
-      
-      const message = new (client.constructor as any).Message("request_ip");
-      message.destinationName = SOLICITAR_IP_TOPIC;
-      message.qos = 1;
-      
-      try {
-        client.send(message);
-        console.log("[MQTT] ✓ Solicitação enviada com sucesso!");
-      } catch (err) {
-        console.log("[MQTT] ✗ Erro ao publicar:", err);
+    // Subscreve ao tópico de resposta
+    client.subscribe(ENVIAR_IP_TOPIC, { qos: 1 }, (err: any) => {
+      if (err) {
+        console.log("[MQTT] Erro ao subscrever:", err);
         setSolicitandoIp(false);
-        Alert.alert("Erro", "Erro ao enviar solicitação");
-        client.removeListener("message", handleMessage);
+        Alert.alert("Erro", "Erro ao subscrever ao tópico MQTT");
         return;
       }
-    }, 500);
+      
+      console.log("[MQTT] ✓ Inscrito em:", ENVIAR_IP_TOPIC);
+      
+      // Publica solicitação
+      console.log("[MQTT] Publicando solicitação em:", SOLICITAR_IP_TOPIC);
+      client.publish(SOLICITAR_IP_TOPIC, "request_ip", { qos: 1 }, (err: any) => {
+        if (err) {
+          console.log("[MQTT] Erro ao publicar:", err);
+          setSolicitandoIp(false);
+          Alert.alert("Erro", "Erro ao enviar solicitação");
+          client.removeListener("message", handleMessage);
+          return;
+        }
+        console.log("[MQTT] ✓ Solicitação enviada!");
+      });
+    });
 
     // Timeout de 15 segundos
     timeoutId = setTimeout(() => {
-      if (!ipRecebido) {
-        console.log("[MQTT] Timeout atingido - nenhuma resposta recebida");
-        setSolicitandoIp(false);
-        try {
-          client.removeListener("message", handleMessage);
-        } catch (e) {
-          console.log("[MQTT] Erro no cleanup:", e);
-        }
-        Alert.alert(
-          "Timeout",
-          "Não foi possível obter o IP automaticamente.\n\nVerifique se:\n• O sistema Python está em execução\n• O MQTT está conectado em ambos os lados\n• O Python está subscrito em 'dados/solicitar_ip'"
-        );
+      console.log("[MQTT] Timeout atingido");
+      setSolicitandoIp(false);
+      try {
+        client.removeListener("message", handleMessage);
+        client.unsubscribe(ENVIAR_IP_TOPIC);
+      } catch (e) {
+        console.log("[MQTT] Erro no cleanup:", e);
       }
+      Alert.alert(
+        "Timeout",
+        "Não foi possível obter o IP automaticamente.\n\nVerifique se:\n• O sistema Python está em execução\n• O MQTT está conectado em ambos os lados"
+      );
     }, 15000);
   };
 
@@ -165,7 +169,7 @@ export default function CameraScreen() {
     setStart(true);
   };
 
-  // URL da câmera
+  // URL da câmera (sempre usa IA agora)
   const cameraUrl = `${ip}/camera_ia`;
 
   return (
@@ -261,7 +265,6 @@ export default function CameraScreen() {
               <Text style={styles.infoText}>
                 • Digite o endereço IP manualmente no formato IP:PORTA{"\n"}
                 • Ou use a opção automática via MQTT{"\n"}
-                • O IP será recebido no mesmo tópico das cores (dados/camera){"\n"}
                 • Certifique-se que o servidor está em execução
               </Text>
             </View>
@@ -272,15 +275,6 @@ export default function CameraScreen() {
             <View style={styles.streamHeader}>
               <Text style={styles.streamTitle}>Detecção de Cores em Tempo Real</Text>
               <Text style={styles.streamSubtitle}>{ip}/camera_ia</Text>
-              <View style={styles.statusBadge}>
-                <View style={[
-                  styles.statusDot, 
-                  { backgroundColor: estado === 1 ? "#4caf50" : "#f44336" }
-                ]} />
-                <Text style={styles.statusText}>
-                  Esteira: {estado === 1 ? "LIGADA" : "DESLIGADA"}
-                </Text>
-              </View>
             </View>
 
             {/* WebView da Câmera */}
@@ -513,27 +507,6 @@ const styles = StyleSheet.create({
   streamSubtitle: {
     fontSize: 13,
     color: "#6c757d",
-    marginBottom: 10,
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginTop: 5,
-  },
-  statusDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    marginRight: 8,
-  },
-  statusText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#212529",
   },
   webviewWrapper: {
     width: "100%",

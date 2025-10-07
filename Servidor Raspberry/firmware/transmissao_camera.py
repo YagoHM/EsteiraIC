@@ -14,9 +14,9 @@ MQTT_BROKER = "f36a296472af4ff7bc783d027dcf8cb2.s1.eu.hivemq.cloud"
 MQTT_PORT = 8883
 MQTT_USER = "yago_ic"
 MQTT_PASSWORD = "brokerP&x+e[5&ifZ_R}T"
-MQTT_TOPIC_CAMERA = "dados/camera"
-MQTT_TOPIC_APP = "dados/app"
+MQTT_TOPIC = "dados/camera"
 SOLICITAR_IP_TOPIC = "dados/solicitar_ip"
+APP_CONTROL_TOPIC = "dados/app"
 
 # Configurações de performance
 RESOLUTION_WIDTH = 640
@@ -25,41 +25,176 @@ FPS_TARGET = 15
 MQTT_SEND_INTERVAL = 0.5
 
 # ==============================
-# CLASSE DE ESTADO DO SISTEMA
+# CONTROLE DE ESTADO GLOBAL
 # ==============================
 class SystemState:
+    """Armazena estado do sistema"""
     def __init__(self):
         self.esteira_ligada = False
-        self.cor_vermelho = 0
-        self.cor_verde = 0
-        self.cor_azul = 0
-        self.cor_outras = 0
-        self.local_ip = ""
+        self.cores_detectadas = []
+        self.ultima_cor_detectada = None
+        self.timestamp_ultima_deteccao = None
+        
+    def atualizar_esteira(self, estado):
+        """Atualiza estado da esteira (0 ou 1)"""
+        self.esteira_ligada = bool(int(estado))
+        print(f"[ESTADO] Esteira: {'LIGADA' if self.esteira_ligada else 'DESLIGADA'}")
+        
+    def adicionar_cor(self, cor):
+        """Adiciona cor detectada ao histórico"""
+        if cor not in self.cores_detectadas:
+            self.cores_detectadas.append(cor)
+        self.ultima_cor_detectada = cor
+        self.timestamp_ultima_deteccao = time.time()
+        
+    def get_status(self):
+        """Retorna status completo do sistema"""
+        return {
+            "esteira_ligada": self.esteira_ligada,
+            "cores_detectadas": self.cores_detectadas,
+            "ultima_cor": self.ultima_cor_detectada,
+            "timestamp": self.timestamp_ultima_deteccao
+        }
+
+# ==============================
+# CONTROLE GPIO (PREPARADO PARA RASPBERRY PI)
+# ==============================
+class GPIOController:
+    """Controle de GPIO para Raspberry Pi"""
+    def __init__(self):
+        self.gpio_disponivel = False
+        self.pinos_configurados = {}
+        self._inicializar_gpio()
+        
+    def _inicializar_gpio(self):
+        """Inicializa GPIO se disponível"""
+        try:
+            # Descomente as linhas abaixo quando estiver no Raspberry Pi
+            # import RPi.GPIO as GPIO
+            # GPIO.setmode(GPIO.BCM)
+            # GPIO.setwarnings(False)
+            # self.gpio_disponivel = True
+            # print("[GPIO] GPIO inicializado com sucesso")
+            
+            # Temporário: modo simulação
+            print("[GPIO] Modo simulação (GPIO não disponível)")
+            self.gpio_disponivel = False
+            
+        except Exception as e:
+            print(f"[GPIO] GPIO não disponível: {e}")
+            self.gpio_disponivel = False
     
-    def incrementar_cor(self, cor):
-        """Incrementa contador de cor detectada"""
-        if cor == "Vermelho":
-            self.cor_vermelho += 1
-        elif cor == "Verde":
-            self.cor_verde += 1
-        elif cor == "Azul":
-            self.cor_azul += 1
-        else:
-            self.cor_outras += 1
+    def configurar_pino(self, pino, modo):
+        """Configura um pino GPIO
+        
+        Args:
+            pino (int): Número do pino GPIO
+            modo (str): 'OUT' para saída, 'IN' para entrada
+        """
+        if not self.gpio_disponivel:
+            print(f"[GPIO] Simulação: Pino {pino} configurado como {modo}")
+            self.pinos_configurados[pino] = modo
+            return
+            
+        # Descomente quando estiver no Raspberry Pi
+        # import RPi.GPIO as GPIO
+        # if modo == 'OUT':
+        #     GPIO.setup(pino, GPIO.OUT)
+        # elif modo == 'IN':
+        #     GPIO.setup(pino, GPIO.IN)
+        # self.pinos_configurados[pino] = modo
+        # print(f"[GPIO] Pino {pino} configurado como {modo}")
     
-    def resetar_contadores(self):
-        """Reseta contadores de cores"""
-        self.cor_vermelho = 0
-        self.cor_verde = 0
-        self.cor_azul = 0
-        self.cor_outras = 0
+    def escrever_pino(self, pino, valor):
+        """Escreve valor em pino de saída
+        
+        Args:
+            pino (int): Número do pino
+            valor (bool): True para HIGH, False para LOW
+        """
+        if not self.gpio_disponivel:
+            print(f"[GPIO] Simulação: Pino {pino} = {valor}")
+            return
+            
+        # Descomente quando estiver no Raspberry Pi
+        # import RPi.GPIO as GPIO
+        # GPIO.output(pino, GPIO.HIGH if valor else GPIO.LOW)
+    
+    def ler_pino(self, pino):
+        """Lê valor de pino de entrada"""
+        if not self.gpio_disponivel:
+            return False
+            
+        # Descomente quando estiver no Raspberry Pi
+        # import RPi.GPIO as GPIO
+        # return GPIO.input(pino)
+    
+    def cleanup(self):
+        """Limpa configurações GPIO"""
+        if self.gpio_disponivel:
+            # import RPi.GPIO as GPIO
+            # GPIO.cleanup()
+            print("[GPIO] GPIO cleanup realizado")
+
+# ==============================
+# CONTROLE LCD (PREPARADO PARA FUTURO)
+# ==============================
+class LCDController:
+    """Controle de display LCD"""
+    def __init__(self):
+        self.lcd_disponivel = False
+        self._inicializar_lcd()
+        
+    def _inicializar_lcd(self):
+        """Inicializa LCD se disponível"""
+        try:
+            # FUTURO: Adicionar inicialização do LCD aqui
+            # Exemplo para LCD I2C 16x2:
+            # from RPLCD.i2c import CharLCD
+            # self.lcd = CharLCD('PCF8574', 0x27)
+            # self.lcd_disponivel = True
+            
+            print("[LCD] LCD não configurado (preparado para implementação futura)")
+            self.lcd_disponivel = False
+            
+        except Exception as e:
+            print(f"[LCD] LCD não disponível: {e}")
+            self.lcd_disponivel = False
+    
+    def exibir_mensagem(self, linha1="", linha2=""):
+        """Exibe mensagem no LCD
+        
+        Args:
+            linha1 (str): Texto da primeira linha
+            linha2 (str): Texto da segunda linha
+        """
+        if not self.lcd_disponivel:
+            print(f"[LCD] Simulação: '{linha1}' | '{linha2}'")
+            return
+            
+        # FUTURO: Implementar exibição no LCD
+        # self.lcd.clear()
+        # self.lcd.write_string(linha1)
+        # self.lcd.crlf()
+        # self.lcd.write_string(linha2)
+    
+    def limpar(self):
+        """Limpa display LCD"""
+        if self.lcd_disponivel:
+            # self.lcd.clear()
+            pass
+    
+    def atualizar_status(self, esteira_ligada, cor_detectada):
+        """Atualiza LCD com status do sistema"""
+        linha1 = f"Est: {'ON ' if esteira_ligada else 'OFF'}"
+        linha2 = f"Cor: {cor_detectada[:12] if cor_detectada else 'Nenhuma'}"
+        self.exibir_mensagem(linha1, linha2)
 
 # ==============================
 # MQTT SETUP
 # ==============================
 class MQTTHandler:
-    def __init__(self, system_state):
-        self.system_state = system_state
+    def __init__(self, system_state, lcd_controller):
         self.client = mqtt.Client(client_id="camera_python", clean_session=True)
         self.client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
         self.client.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLS)
@@ -67,19 +202,25 @@ class MQTTHandler:
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
         self.client.on_disconnect = self.on_disconnect
+        
+        self.system_state = system_state
+        self.lcd_controller = lcd_controller
         self.last_colors = []
         self.last_send_time = 0
         self.connected = False
+        self.local_ip = ""
         
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
             print(f"[MQTT] ✓ Conectado com sucesso!")
             self.connected = True
+            
             # Subscreve aos tópicos necessários
             client.subscribe(SOLICITAR_IP_TOPIC, qos=1)
-            client.subscribe(MQTT_TOPIC_APP, qos=1)
             print(f"[MQTT] ✓ Inscrito em: {SOLICITAR_IP_TOPIC}")
-            print(f"[MQTT] ✓ Inscrito em: {MQTT_TOPIC_APP}")
+            
+            client.subscribe(APP_CONTROL_TOPIC, qos=1)
+            print(f"[MQTT] ✓ Inscrito em: {APP_CONTROL_TOPIC}")
         else:
             print(f"[MQTT] ✗ Falha na conexão. Código: {rc}")
             self.connected = False
@@ -101,66 +242,39 @@ class MQTTHandler:
         print(f"[MQTT]     Tópico: {topic}")
         print(f"[MQTT]     Payload: {payload}")
         
-        # Solicitação de IP
+        # Solicitação de IP - envia para dados/camera
         if topic == SOLICITAR_IP_TOPIC:
             print(f"[MQTT] >>> Solicitação de IP detectada!")
-            ip_response = f"http://{self.system_state.local_ip}:5000"
-            print(f"[MQTT] >>> Enviando IP para dados/camera: {ip_response}")
+            ip_response = f"http://{self.local_ip}:5000"
+            print(f"[MQTT] >>> Enviando IP: {ip_response}")
             
-            # Publica a resposta no tópico dados/camera
-            result = client.publish(MQTT_TOPIC_CAMERA, ip_response, qos=1)
+            result = client.publish(MQTT_TOPIC, ip_response, qos=1)
             
             if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                print(f"[MQTT] ✓ IP enviado com sucesso para: {MQTT_TOPIC_CAMERA}")
+                print(f"[MQTT] ✓ IP enviado com sucesso para: {MQTT_TOPIC}")
             else:
                 print(f"[MQTT] ✗ Erro ao enviar IP. Código: {result.rc}")
         
-        # Controle da esteira (0 ou 1)
-        elif topic == MQTT_TOPIC_APP:
-            if payload == "0":
-                self.system_state.esteira_ligada = False
-                print("[SISTEMA] ✓ Esteira DESLIGADA")
-                self.controlar_gpio_esteira(False)
-                self.atualizar_lcd_status()
-            elif payload == "1":
-                self.system_state.esteira_ligada = True
-                print("[SISTEMA] ✓ Esteira LIGADA")
-                self.controlar_gpio_esteira(True)
-                self.atualizar_lcd_status()
-    
-    def controlar_gpio_esteira(self, ligar):
-        """
-        Função para controlar GPIO da esteira (Raspberry Pi)
-        TODO: Implementar controle GPIO
-        """
-        # Exemplo futuro:
-        # import RPi.GPIO as GPIO
-        # GPIO.setmode(GPIO.BCM)
-        # ESTEIRA_PIN = 17
-        # GPIO.setup(ESTEIRA_PIN, GPIO.OUT)
-        # GPIO.output(ESTEIRA_PIN, GPIO.HIGH if ligar else GPIO.LOW)
-        
-        print(f"[GPIO] Esteira {'LIGADA' if ligar else 'DESLIGADA'} (função aguardando implementação)")
-    
-    def atualizar_lcd_status(self):
-        """
-        Função para atualizar display LCD com status do sistema
-        TODO: Implementar controle LCD
-        """
-        # Exemplo futuro:
-        # from RPLCD.i2c import CharLCD
-        # lcd = CharLCD('PCF8574', 0x27)
-        # lcd.clear()
-        # lcd.write_string(f"Esteira: {'ON' if self.system_state.esteira_ligada else 'OFF'}")
-        # lcd.cursor_pos = (1, 0)
-        # lcd.write_string(f"R:{self.system_state.cor_vermelho} V:{self.system_state.cor_verde} A:{self.system_state.cor_azul}")
-        
-        print(f"[LCD] Atualizando display (função aguardando implementação)")
-        print(f"[LCD] Estado: {'LIGADA' if self.system_state.esteira_ligada else 'DESLIGADA'}")
-        print(f"[LCD] Cores: R={self.system_state.cor_vermelho} V={self.system_state.cor_verde} A={self.system_state.cor_azul}")
+        # Controle da esteira de dados/app
+        elif topic == APP_CONTROL_TOPIC:
+            print(f"[MQTT] >>> Comando de esteira recebido: {payload}")
+            try:
+                estado = payload.strip()
+                if estado in ['0', '1']:
+                    self.system_state.atualizar_esteira(estado)
+                    
+                    # Atualiza LCD
+                    self.lcd_controller.atualizar_status(
+                        self.system_state.esteira_ligada,
+                        self.system_state.ultima_cor_detectada
+                    )
+                else:
+                    print(f"[MQTT] ⚠️ Valor inválido para esteira: {estado}")
+            except Exception as e:
+                print(f"[MQTT] ✗ Erro ao processar comando de esteira: {e}")
     
     def connect(self, local_ip):
-        self.system_state.local_ip = local_ip
+        self.local_ip = local_ip
         try:
             print(f"[MQTT] Conectando ao broker: {MQTT_BROKER}:{MQTT_PORT}")
             self.client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
@@ -189,20 +303,24 @@ class MQTTHandler:
         if current_time - self.last_send_time >= MQTT_SEND_INTERVAL:
             if colors and colors != self.last_colors:
                 try:
-                    # Envia cada cor individualmente
-                    for cor in set(colors):
-                        msg = cor
-                        result = self.client.publish(MQTT_TOPIC_CAMERA, msg, qos=0)
+                    msg = ",".join(set(colors))
+                    result = self.client.publish(MQTT_TOPIC, msg, qos=0)
+                    
+                    if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                        self.last_colors = colors.copy()
+                        self.last_send_time = current_time
                         
-                        if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                            # Incrementa contador no sistema
+                        # Atualiza estado do sistema
+                        for cor in colors:
                             cor_nome = cor.replace("Cor:", "")
-                            self.system_state.incrementar_cor(cor_nome)
-                            print(f"[MQTT] ✓ Publicado: {msg}")
-                    
-                    self.last_colors = colors.copy()
-                    self.last_send_time = current_time
-                    
+                            self.system_state.adicionar_cor(cor_nome)
+                        
+                        # Atualiza LCD
+                        self.lcd_controller.atualizar_status(
+                            self.system_state.esteira_ligada,
+                            self.system_state.ultima_cor_detectada
+                        )
+                        
                 except Exception as e:
                     print(f"[MQTT] Erro ao publicar cores: {e}")
 
@@ -328,23 +446,17 @@ class CameraStream:
                 time.sleep(0.1)
                 continue
             
-            # SEMPRE processa e detecta cores (mostra visualmente)
             processed_frame, detected_colors = self.detector.detect(frame)
-            
-            # Só PUBLICA no MQTT se esteira estiver ligada
-            if self.system_state.esteira_ligada and detected_colors:
-                self.mqtt_handler.publish_colors(detected_colors)
             
             frame_count += 1
             
             # Adiciona informações no frame
-            status_text = "LIGADA" if self.system_state.esteira_ligada else "DESLIGADA"
-            status_color = (0, 255, 0) if self.system_state.esteira_ligada else (0, 0, 255)
+            status_esteira = "ON" if self.system_state.esteira_ligada else "OFF"
+            cv2.putText(processed_frame, f"FPS: {FPS_TARGET} | Esteira: {status_esteira}", 
+                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
             
-            cv2.putText(processed_frame, f"Esteira: {status_text}", 
-                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, status_color, 2)
-            cv2.putText(processed_frame, f"Frame: {frame_count}", 
-                       (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            if detected_colors:
+                self.mqtt_handler.publish_colors(detected_colors)
             
             ret, buffer = cv2.imencode('.jpg', processed_frame, 
                                       [cv2.IMWRITE_JPEG_QUALITY, 85])
@@ -364,7 +476,9 @@ class CameraStream:
 # ==============================
 app = Flask(__name__)
 system_state = SystemState()
-mqtt_handler = MQTTHandler(system_state)
+gpio_controller = GPIOController()
+lcd_controller = LCDController()
+mqtt_handler = MQTTHandler(system_state, lcd_controller)
 camera_stream = None
 
 @app.route("/camera_ia")
@@ -379,14 +493,12 @@ def status():
     return {
         "mqtt_connected": mqtt_handler.connected,
         "camera_running": camera_stream.running if camera_stream else False,
+        "ip": get_local_ip(),
         "esteira_ligada": system_state.esteira_ligada,
-        "cores": {
-            "vermelho": system_state.cor_vermelho,
-            "verde": system_state.cor_verde,
-            "azul": system_state.cor_azul,
-            "outras": system_state.cor_outras
-        },
-        "ip": get_local_ip()
+        "cores_detectadas": system_state.cores_detectadas,
+        "ultima_cor": system_state.ultima_cor_detectada,
+        "gpio_disponivel": gpio_controller.gpio_disponivel,
+        "lcd_disponivel": lcd_controller.lcd_disponivel
     }
 
 # ==============================
@@ -406,7 +518,6 @@ if __name__ == "__main__":
     # Obtém IP local
     ip = get_local_ip()
     print(f"\n[SISTEMA] IP Local: {ip}")
-    system_state.local_ip = ip
     
     # Conecta MQTT
     print("\n[MQTT] Conectando ao broker...")
@@ -425,9 +536,11 @@ if __name__ == "__main__":
     print(f"📹 Acessar câmera IA: http://{ip}:5000/camera_ia")
     print(f"📊 Status do sistema: http://{ip}:5000/status")
     print(f"📡 MQTT Status: {'Conectado' if mqtt_handler.connected else 'Desconectado'}")
-    print(f"📡 Aguardando solicitações em: {SOLICITAR_IP_TOPIC}")
-    print(f"📡 Controle esteira via: {MQTT_TOPIC_APP}")
-    print(f"📡 Publicando dados em: {MQTT_TOPIC_CAMERA}")
+    print(f"📡 Tópico de cores e IP: {MQTT_TOPIC}")
+    print(f"📡 Tópico de controle: {APP_CONTROL_TOPIC}")
+    print(f"📡 Tópico de solicitação: {SOLICITAR_IP_TOPIC}")
+    print(f"🎛️  GPIO: {'Disponível' if gpio_controller.gpio_disponivel else 'Simulação'}")
+    print(f"📺 LCD: {'Configurado' if lcd_controller.lcd_disponivel else 'Preparado'}")
     print("=" * 50 + "\n")
     
     try:
@@ -437,4 +550,5 @@ if __name__ == "__main__":
     finally:
         camera_stream.stop()
         mqtt_handler.client.loop_stop()
+        gpio_controller.cleanup()
         cv2.destroyAllWindows()
