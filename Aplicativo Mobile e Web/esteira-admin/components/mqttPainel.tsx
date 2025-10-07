@@ -1,7 +1,6 @@
 import ImageViewer from '@/components/imageViewer';
 import { informacoesMqtt } from '@/hooks/useMqtt';
-import React from 'react';
-import { ActivityIndicator, Button, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Button, StyleSheet, View } from 'react-native';
 
 export default function MqttPainel() {
   const {
@@ -24,10 +23,10 @@ export default function MqttPainel() {
     <View style={styles.container}>
       <ImageViewer imgSource={img} />
       <Button title={ligarDesligarEstado} onPress={alterarEstadoEsteira} />
-      <Text style={styles.text}>Vermelho: {vermelho}</Text>
+      {/* <Text style={styles.text}>Vermelho: {vermelho}</Text>
       <Text style={styles.text}>Verde: {verde}</Text>
       <Text style={styles.text}>Azul: {azul}</Text>
-      <Text style={styles.text}>Cor N. Definida: {corndef}</Text>
+      <Text style={styles.text}>Cor N. Definida: {corndef}</Text> */}
     </View>
   );
 }
