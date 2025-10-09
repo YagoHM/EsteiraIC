@@ -99,9 +99,9 @@ class GPIOController:
         # Descomente quando estiver no Raspberry Pi
         import RPi.GPIO as GPIO
         if modo == 'OUT':
-             GPIO.setup(pino, GPIO.OUT)
+             GPIO.setup(22, GPIO.OUT)
         elif modo == 'IN':
-             GPIO.setup(pino, GPIO.IN)
+             GPIO.setup(22, GPIO.IN)
         self.pinos_configurados[pino] = modo
         print(f"[GPIO] Pino {pino} configurado como {modo}")
     
@@ -112,14 +112,14 @@ class GPIOController:
             pino (int): Número do pino
             valor (bool): True para HIGH, False para LOW
         """
-        pino = 22
+        
         if not self.gpio_disponivel:
-            print(f"[GPIO] Simulação: Pino {pino} = {valor}")
+            print(f"[GPIO] Simulação: Pino {22} = {valor}")
             return
             
         # Descomente quando estiver no Raspberry Pi
         import RPi.GPIO as GPIO
-        GPIO.output(pino, GPIO.HIGH if valor else GPIO.LOW)
+        GPIO.output(22, GPIO.HIGH if valor else GPIO.LOW)
     
     def ler_pino(self, pino):
         """Lê valor de pino de entrada"""
@@ -133,8 +133,8 @@ class GPIOController:
     def cleanup(self):
         """Limpa configurações GPIO"""
         if self.gpio_disponivel:
-            # import RPi.GPIO as GPIO
-            # GPIO.cleanup()
+            import RPi.GPIO as GPIO
+            GPIO.cleanup()
             print("[GPIO] GPIO cleanup realizado")
 
 # ==============================
