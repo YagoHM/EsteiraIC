@@ -148,11 +148,9 @@ class LCDController:
     def _inicializar_lcd(self):
         """Inicializa LCD se disponível"""
         try:
-            # FUTURO: Adicionar inicialização do LCD aqui
-            # Exemplo para LCD I2C 16x2:
-            # from RPLCD.i2c import CharLCD
-            # self.lcd = CharLCD('PCF8574', 0x27)
-            # self.lcd_disponivel = True
+            from RPLCD.i2c import CharLCD
+            self.lcd = CharLCD('PCF8574', 0x27)
+            self.lcd_disponivel = True
             
             print("[LCD] LCD não configurado (preparado para implementação futura)")
             self.lcd_disponivel = False
@@ -173,15 +171,15 @@ class LCDController:
             return
             
         # FUTURO: Implementar exibição no LCD
-        # self.lcd.clear()
-        # self.lcd.write_string(linha1)
-        # self.lcd.crlf()
-        # self.lcd.write_string(linha2)
+        self.lcd.clear()
+        self.lcd.write_string(linha1)
+        self.lcd.crlf()
+        self.lcd.write_string(linha2)
     
     def limpar(self):
         """Limpa display LCD"""
         if self.lcd_disponivel:
-            # self.lcd.clear()
+            self.lcd.clear()
             pass
     
     def atualizar_status(self, esteira_ligada, cor_detectada):
