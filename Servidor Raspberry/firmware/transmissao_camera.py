@@ -70,11 +70,11 @@ class GPIOController:
         """Inicializa GPIO se disponível"""
         try:
             # Descomente as linhas abaixo quando estiver no Raspberry Pi
-            # import RPi.GPIO as GPIO
-            # GPIO.setmode(GPIO.BCM)
-            # GPIO.setwarnings(False)
-            # self.gpio_disponivel = True
-            # print("[GPIO] GPIO inicializado com sucesso")
+            import RPi.GPIO as GPIO
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setwarnings(False)
+            self.gpio_disponivel = True
+            print("[GPIO] GPIO inicializado com sucesso")
             
             # Temporário: modo simulação
             print("[GPIO] Modo simulação (GPIO não disponível)")
@@ -97,13 +97,13 @@ class GPIOController:
             return
             
         # Descomente quando estiver no Raspberry Pi
-        # import RPi.GPIO as GPIO
-        # if modo == 'OUT':
-        #     GPIO.setup(pino, GPIO.OUT)
-        # elif modo == 'IN':
-        #     GPIO.setup(pino, GPIO.IN)
-        # self.pinos_configurados[pino] = modo
-        # print(f"[GPIO] Pino {pino} configurado como {modo}")
+        import RPi.GPIO as GPIO
+        if modo == 'OUT':
+             GPIO.setup(pino, GPIO.OUT)
+        elif modo == 'IN':
+             GPIO.setup(pino, GPIO.IN)
+        self.pinos_configurados[pino] = modo
+        print(f"[GPIO] Pino {pino} configurado como {modo}")
     
     def escrever_pino(self, pino, valor):
         """Escreve valor em pino de saída
@@ -112,13 +112,14 @@ class GPIOController:
             pino (int): Número do pino
             valor (bool): True para HIGH, False para LOW
         """
+        pino = 22
         if not self.gpio_disponivel:
             print(f"[GPIO] Simulação: Pino {pino} = {valor}")
             return
             
         # Descomente quando estiver no Raspberry Pi
-        # import RPi.GPIO as GPIO
-        # GPIO.output(pino, GPIO.HIGH if valor else GPIO.LOW)
+        import RPi.GPIO as GPIO
+        GPIO.output(pino, GPIO.HIGH if valor else GPIO.LOW)
     
     def ler_pino(self, pino):
         """Lê valor de pino de entrada"""
@@ -126,8 +127,8 @@ class GPIOController:
             return False
             
         # Descomente quando estiver no Raspberry Pi
-        # import RPi.GPIO as GPIO
-        # return GPIO.input(pino)
+        import RPi.GPIO as GPIO
+        return GPIO.input(pino)
     
     def cleanup(self):
         """Limpa configurações GPIO"""
