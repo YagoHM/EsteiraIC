@@ -76,11 +76,11 @@ class GPIOController:
         """Inicializa GPIO se disponível"""
         try:
             # Descomente as linhas abaixo quando estiver no Raspberry Pi
-            # import RPi.GPIO as GPIO
-            # GPIO.setmode(GPIO.BCM)
-            # GPIO.setwarnings(False)
-            # self.gpio_disponivel = True
-            # print("[GPIO] GPIO inicializado com sucesso")
+            import RPi.GPIO as GPIO
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setwarnings(False)
+            self.gpio_disponivel = True
+            print("[GPIO] GPIO inicializado com sucesso")
             
             # Temporário: modo simulação
             print("[GPIO] Modo simulação (GPIO não disponível)")
@@ -103,13 +103,13 @@ class GPIOController:
             return
             
         # Descomente quando estiver no Raspberry Pi
-        # import RPi.GPIO as GPIO
-        # if modo == 'OUT':
-        #     GPIO.setup(pino, GPIO.OUT)
-        # elif modo == 'IN':
-        #     GPIO.setup(pino, GPIO.IN)
-        # self.pinos_configurados[pino] = modo
-        # print(f"[GPIO] Pino {pino} configurado como {modo}")
+        import RPi.GPIO as GPIO
+        if modo == 'OUT':
+             GPIO.setup(22, GPIO.OUT)
+        elif modo == 'IN':
+             GPIO.setup(22, GPIO.IN)
+        self.pinos_configurados[pino] = modo
+        print(f"[GPIO] Pino {pino} configurado como {modo}")
     
     def escrever_pino(self, pino, valor):
         """Escreve valor em pino de saída
@@ -118,13 +118,14 @@ class GPIOController:
             pino (int): Número do pino
             valor (bool): True para HIGH, False para LOW
         """
+        
         if not self.gpio_disponivel:
-            print(f"[GPIO] Simulação: Pino {pino} = {valor}")
+            print(f"[GPIO] Simulação: Pino {22} = {valor}")
             return
             
         # Descomente quando estiver no Raspberry Pi
-        # import RPi.GPIO as GPIO
-        # GPIO.output(pino, GPIO.HIGH if valor else GPIO.LOW)
+        import RPi.GPIO as GPIO
+        GPIO.output(22, GPIO.HIGH if valor else GPIO.LOW)
     
     def ler_pino(self, pino):
         """Lê valor de pino de entrada"""
@@ -132,14 +133,14 @@ class GPIOController:
             return False
             
         # Descomente quando estiver no Raspberry Pi
-        # import RPi.GPIO as GPIO
-        # return GPIO.input(pino)
+        import RPi.GPIO as GPIO
+        return GPIO.input(pino)
     
     def cleanup(self):
         """Limpa configurações GPIO"""
         if self.gpio_disponivel:
-            # import RPi.GPIO as GPIO
-            # GPIO.cleanup()
+            import RPi.GPIO as GPIO
+            GPIO.cleanup()
             print("[GPIO] GPIO cleanup realizado")
 
 # ==============================
@@ -154,11 +155,9 @@ class LCDController:
     def _inicializar_lcd(self):
         """Inicializa LCD se disponível"""
         try:
-            # FUTURO: Adicionar inicialização do LCD aqui
-            # Exemplo para LCD I2C 16x2:
-            # from RPLCD.i2c import CharLCD
-            # self.lcd = CharLCD('PCF8574', 0x27)
-            # self.lcd_disponivel = True
+            from RPLCD.i2c import CharLCD
+            self.lcd = CharLCD('PCF8574', 0x27)
+            self.lcd_disponivel = True
             
             print("[LCD] LCD não configurado (preparado para implementação futura)")
             self.lcd_disponivel = False
@@ -179,15 +178,15 @@ class LCDController:
             return
             
         # FUTURO: Implementar exibição no LCD
-        # self.lcd.clear()
-        # self.lcd.write_string(linha1)
-        # self.lcd.crlf()
-        # self.lcd.write_string(linha2)
+        self.lcd.clear()
+        self.lcd.write_string(linha1)
+        self.lcd.crlf()
+        self.lcd.write_string(linha2)
     
     def limpar(self):
         """Limpa display LCD"""
         if self.lcd_disponivel:
-            # self.lcd.clear()
+            self.lcd.clear()
             pass
     
     def atualizar_status(self, esteira_ligada, cor_detectada):

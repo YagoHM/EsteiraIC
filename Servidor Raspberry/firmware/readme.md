@@ -20,6 +20,7 @@ source venv/bin/activate
 
 pip install --upgrade pip setuptools wheel
 pip install numpy opencv-python flask paho-mqtt
+sudo pip install RPLCD
 
 # Se houver problemas com OpenCV, usar versão leve:
 
