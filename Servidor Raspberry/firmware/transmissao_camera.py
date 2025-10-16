@@ -4,8 +4,11 @@ import socket
 import ssl
 import threading
 import time
-from flask import Flask, Response
+from flask import Flask, Response, jsonify
+from flask_cors import CORS
 import paho.mqtt.client as mqtt
+import json
+from datetime import datetime
 
 # ==============================
 # CONFIGURAÇÕES
@@ -24,6 +27,8 @@ RESOLUTION_HEIGHT = 480
 FPS_TARGET = 15
 MQTT_SEND_INTERVAL = 0.5
 
+cores_e_data = "dados.json"
+
 # ==============================
 # CONTROLE DE ESTADO GLOBAL
 # ==============================
@@ -34,6 +39,7 @@ class SystemState:
         self.cores_detectadas = []
         self.ultima_cor_detectada = None
         self.timestamp_ultima_deteccao = None
+        self.ultimo_frame = None
         
     def atualizar_esteira(self, estado):
         """Atualiza estado da esteira (0 ou 1)"""
@@ -45,8 +51,8 @@ class SystemState:
         if cor not in self.cores_detectadas:
             self.cores_detectadas.append(cor)
         self.ultima_cor_detectada = cor
-        self.timestamp_ultima_deteccao = time.time()
-        
+        # self.timestamp_ultima_deteccao = time.time()
+        self.timestamp_ultima_deteccao =  datetime.now()
     def get_status(self):
         """Retorna status completo do sistema"""
         return {
@@ -292,6 +298,264 @@ class MQTTHandler:
             else:
                 print("[MQTT] ✗ Timeout na conexão")
                 return False
+        except Exception as e:
+            print(f"[MQTT] ✗ Erro ao conectar: {e}")
+            return False
+    
+    def publish_colors(self, colors):
+        """Publica a cor predominante detectada com throttling e delay"""
+        current_time = time.time()
+        if current_time - self.last_send_time >= MQTT_SEND_INTERVAL:
+            if colors and colors != self.last_colors:
+                try:
+                    predominant_color = colors[0]
+                    
+                    result = self.client.publish(MQTT_TOPIC, predominant_color, qos=0)
+                    
+                    if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                        self.last_colors = [predominant_color]
+                        self.last_send_time = current_time
+                        
+                        # Atualiza estado do sistema
+                        cor_nome = predominant_color.replace("Cor:", "")
+                        self.system_state.adicionar_cor(cor_nome)
+                        
+                        # Atualiza LCD
+                        self.lcd_controller.atualizar_status(
+                            self.system_state.esteira_ligada,
+                            self.system_state.ultima_cor_detectada
+                        )
+                        
+                except Exception as e:
+                    print(f"[MQTT] Erro ao publicar cores: {e}")
+                    
+    def __init__(self, system_state, lcd_controller):
+        self.client = mqtt.Client(client_id="camera_python", clean_session=True)
+        self.client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+        self.client.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLS)
+        self.client.tls_insecure_set(True)
+        self.client.on_connect = self.on_connect
+        self.client.on_message = self.on_message
+        self.client.on_disconnect = self.on_disconnect
+        
+        self.system_state = system_state
+        self.lcd_controller = lcd_controller
+        self.last_colors = []
+        self.last_send_time = 0
+        self.connected = False
+        self.local_ip = ""
+        
+    def on_connect(self, client, userdata, flags, rc):
+        if rc == 0:
+            print(f"[MQTT] ✓ Conectado com sucesso!")
+            self.connected = True
+            
+            # Subscreve aos tópicos necessários
+            client.subscribe(SOLICITAR_IP_TOPIC, qos=1)
+            print(f"[MQTT] ✓ Inscrito em: {SOLICITAR_IP_TOPIC}")
+            
+            client.subscribe(APP_CONTROL_TOPIC, qos=1)
+            print(f"[MQTT] ✓ Inscrito em: {APP_CONTROL_TOPIC}")
+        else:
+            print(f"[MQTT] ✗ Falha na conexão. Código: {rc}")
+            self.connected = False
+        
+    def on_disconnect(self, client, userdata, rc):
+        print(f"[MQTT] Desconectado. Código: {rc}")
+        self.connected = False
+        if rc != 0:
+            print("[MQTT] Tentando reconectar...")
+            try:
+                client.reconnect()
+            except Exception as e:
+                print(f"[MQTT] Erro ao reconectar: {e}")
+        
+    def on_message(self, client, userdata, msg):
+        topic = msg.topic
+        payload = msg.payload.decode('utf-8')
+        print(f"\n[MQTT] >>> Mensagem recebida")
+        print(f"[MQTT]     Tópico: {topic}")
+        print(f"[MQTT]     Payload: {payload}")
+        
+        # Solicitação de IP - envia para dados/camera
+        if topic == SOLICITAR_IP_TOPIC:
+            print(f"[MQTT] >>> Solicitação de IP detectada!")
+            ip_response = f"http://{self.local_ip}:5000"
+            print(f"[MQTT] >>> Enviando IP: {ip_response}")
+            
+            result = client.publish(MQTT_TOPIC, ip_response, qos=1)
+            
+            if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                print(f"[MQTT] ✓ IP enviado com sucesso para: {MQTT_TOPIC}")
+            else:
+                print(f"[MQTT] ✗ Erro ao enviar IP. Código: {result.rc}")
+        
+        # Controle da esteira de dados/app
+        elif topic == APP_CONTROL_TOPIC:
+            print(f"[MQTT] >>> Comando de esteira recebido: {payload}")
+            try:
+                estado = payload.strip()
+                if estado in ['0', '1']:
+                    self.system_state.atualizar_esteira(estado)
+                    
+                    # Atualiza LCD
+                    self.lcd_controller.atualizar_status(
+                        self.system_state.esteira_ligada,
+                        self.system_state.ultima_cor_detectada
+                    )
+                else:
+                    print(f"[MQTT] ⚠️ Valor inválido para esteira: {estado}")
+            except Exception as e:
+                print(f"[MQTT] ✗ Erro ao processar comando de esteira: {e}")
+    
+    def connect(self, local_ip):
+        self.local_ip = local_ip
+        try:
+            print(f"[MQTT] Conectando ao broker: {MQTT_BROKER}:{MQTT_PORT}")
+            self.client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+            self.client.loop_start()
+            
+            # Aguarda conexão
+            timeout = 10
+            start_time = time.time()
+            while not self.connected and (time.time() - start_time) < timeout:
+                time.sleep(0.1)
+            
+            if self.connected:
+                print("[MQTT] ✓ Conexão estabelecida!")
+                return True
+            else:
+                print("[MQTT] ✗ Timeout na conexão")
+                return False
+        except Exception as e:
+            print(f"[MQTT] ✗ Erro ao conectar: {e}")
+            return False
+    
+    def publish_colors(self, colors):
+        """Publica a cor predominante detectada com throttling e delay"""
+        current_time = time.time()
+        if current_time - self.last_send_time >= MQTT_SEND_INTERVAL:
+            if colors and colors != self.last_colors:
+                try:
+                    msg = ",".join(set(colors))
+                    result = self.client.publish(MQTT_TOPIC, msg, qos=0)
+                    
+                    if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                        self.last_colors = colors.copy()
+                        self.last_send_time = current_time
+                        
+                        # Atualiza estado do sistema
+                        for cor in colors:
+                            cor_nome = cor.replace("Cor:", "")
+                            self.system_state.adicionar_cor(cor_nome)
+                        
+                        # Atualiza LCD
+                        self.lcd_controller.atualizar_status(
+                            self.system_state.esteira_ligada,
+                            self.system_state.ultima_cor_detectada
+                        )
+                        
+                except Exception as e:
+                    print(f"[MQTT] Erro ao publicar cores: {e}")
+
+    def __init__(self, system_state, lcd_controller):
+        self.client = mqtt.Client(client_id="camera_python", clean_session=True)
+        self.client.username_pw_set(MQTT_USER, MQTT_PASSWORD)
+        self.client.tls_set(cert_reqs=ssl.CERT_NONE, tls_version=ssl.PROTOCOL_TLS)
+        self.client.tls_insecure_set(True)
+        self.client.on_connect = self.on_connect
+        self.client.on_message = self.on_message
+        self.client.on_disconnect = self.on_disconnect
+        
+        self.system_state = system_state
+        self.lcd_controller = lcd_controller
+        self.last_colors = []
+        self.last_send_time = 0
+        self.connected = False
+        self.local_ip = ""
+        
+    def on_connect(self, client, userdata, flags, rc):
+        if rc == 0:
+            print(f"[MQTT] ✓ Conectado com sucesso!")
+            self.connected = True
+            
+            # Subscreve aos tópicos necessários
+            client.subscribe(SOLICITAR_IP_TOPIC, qos=1)
+            print(f"[MQTT] ✓ Inscrito em: {SOLICITAR_IP_TOPIC}")
+            
+            client.subscribe(APP_CONTROL_TOPIC, qos=1)
+            print(f"[MQTT] ✓ Inscrito em: {APP_CONTROL_TOPIC}")
+        else:
+            print(f"[MQTT] ✗ Falha na conexão. Código: {rc}")
+            self.connected = False
+        
+    def on_disconnect(self, client, userdata, rc):
+        print(f"[MQTT] Desconectado. Código: {rc}")
+        self.connected = False
+        if rc != 0:
+            print("[MQTT] Tentando reconectar...")
+            try:
+                client.reconnect()
+            except Exception as e:
+                print(f"[MQTT] Erro ao reconectar: {e}")
+        
+    def on_message(self, client, userdata, msg):
+        topic = msg.topic
+        payload = msg.payload.decode('utf-8')
+        print(f"\n[MQTT] >>> Mensagem recebida")
+        print(f"[MQTT]     Tópico: {topic}")
+        print(f"[MQTT]     Payload: {payload}")
+        
+        # Solicitação de IP - envia para dados/camera
+        if topic == SOLICITAR_IP_TOPIC:
+            print(f"[MQTT] >>> Solicitação de IP detectada!")
+            ip_response = f"http://{self.local_ip}:5000"
+            print(f"[MQTT] >>> Enviando IP: {ip_response}")
+            
+            result = client.publish(MQTT_TOPIC, ip_response, qos=1)
+            
+            if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                print(f"[MQTT] ✓ IP enviado com sucesso para: {MQTT_TOPIC}")
+            else:
+                print(f"[MQTT] ✗ Erro ao enviar IP. Código: {result.rc}")
+        
+        # Controle da esteira de dados/app
+        elif topic == APP_CONTROL_TOPIC:
+            print(f"[MQTT] >>> Comando de esteira recebido: {payload}")
+            try:
+                estado = payload.strip()
+                if estado in ['0', '1']:
+                    self.system_state.atualizar_esteira(estado)
+                    
+                    # Atualiza LCD
+                    self.lcd_controller.atualizar_status(
+                        self.system_state.esteira_ligada,
+                        self.system_state.ultima_cor_detectada
+                    )
+                else:
+                    print(f"[MQTT] ⚠️ Valor inválido para esteira: {estado}")
+            except Exception as e:
+                print(f"[MQTT] ✗ Erro ao processar comando de esteira: {e}")
+    
+    def connect(self, local_ip):
+        self.local_ip = local_ip
+        try:
+            print(f"[MQTT] Conectando ao broker: {MQTT_BROKER}:{MQTT_PORT}")
+            self.client.connect(MQTT_BROKER, MQTT_PORT, keepalive=60)
+            self.client.loop_start()
+            
+            # Aguarda conexão
+            timeout = 10
+            start_time = time.time()
+            while not self.connected and (time.time() - start_time) < timeout:
+                time.sleep(0.1)
+            
+            if self.connected:
+                print("[MQTT] ✓ Conexão estabelecida!")
+                return True
+            else:
+                print("[MQTT] ✗ Timeout na conexão")
+                return False
                 
         except Exception as e:
             print(f"[MQTT] ✗ Erro ao conectar: {e}")
@@ -304,8 +568,14 @@ class MQTTHandler:
             if colors and colors != self.last_colors:
                 try:
                     msg = ",".join(set(colors))
+                    ##AQUI QUE PUBLICA COR##
+                    novo_item = {
+                        "cores": msg,
+                        "timestamp": datetime.now().isoformat()
+                    }
+
                     result = self.client.publish(MQTT_TOPIC, msg, qos=0)
-                    
+
                     if result.rc == mqtt.MQTT_ERR_SUCCESS:
                         self.last_colors = colors.copy()
                         self.last_send_time = current_time
@@ -355,6 +625,125 @@ def get_local_ip():
 # DETECTOR DE CORES LEGO
 # ==============================
 class LegoColorDetector:
+    def __init__(self):
+        self.colors = {
+            "Vermelho": ([0, 120, 70], [10, 255, 255]),
+            "Vermelho2": ([170, 120, 70], [180, 255, 255]),
+            "Azul": ([100, 150, 50], [130, 255, 255]),
+            "Amarelo": ([20, 100, 100], [35, 255, 255]),
+            "Verde": ([35, 50, 50], [85, 255, 255]),
+            "Laranja": ([10, 100, 100], [20, 255, 255]),
+            "Roxo": ([130, 50, 50], [160, 255, 255])
+        }
+        
+        self.min_area = 400
+        self.kernel = np.ones((5, 5), np.uint8)
+    
+    def detect(self, frame):
+        """Detecta cores LEGO no frame"""
+        height, width = frame.shape[:2]
+        if width > RESOLUTION_WIDTH:
+            scale = RESOLUTION_WIDTH / width
+            frame = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        
+        blurred = cv2.GaussianBlur(frame, (5, 5), 0)
+        hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+        
+        detected_colors = []
+        areas = []  # Lista para armazenar as áreas das cores detectadas
+        
+        for color_name, (lower, upper) in self.colors.items():
+            lower = np.array(lower)
+            upper = np.array(upper)
+            
+            mask = cv2.inRange(hsv, lower, upper)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self.kernel)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self.kernel)
+            
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                if area > self.min_area:
+                    (x, y), radius = cv2.minEnclosingCircle(cnt)
+                    center = (int(x), int(y))
+                    radius = int(radius)
+                    
+                    color_display = color_name.replace("2", "")
+                    cv2.circle(frame, center, radius, (0, 255, 0), 2)
+                    cv2.putText(frame, color_display, 
+                              (center[0] - 30, center[1] - radius - 10),
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                    
+                    detected_colors.append(f"Cor:{color_display}")
+                    areas.append((color_display, area))  # Adiciona a cor e sua área
+
+        # Agora, escolhemos a cor com a maior área
+        if areas:
+            predominant_color = max(areas, key=lambda item: item[1])[0]  # Cor com maior área
+            return frame, [predominant_color]  # Retorna apenas a cor predominante
+        
+        return frame, []
+    def __init__(self):
+        self.colors = {
+            "Vermelho": ([0, 120, 70], [10, 255, 255]),
+            "Vermelho2": ([170, 120, 70], [180, 255, 255]),
+            "Azul": ([100, 150, 50], [130, 255, 255]),
+            "Amarelo": ([20, 100, 100], [35, 255, 255]),
+            "Verde": ([35, 50, 50], [85, 255, 255]),
+            "Laranja": ([10, 100, 100], [20, 255, 255]),
+            "Roxo": ([130, 50, 50], [160, 255, 255])
+        }
+        
+        self.min_area = 400
+        self.kernel = np.ones((5, 5), np.uint8)
+    
+    def detect(self, frame):
+        """Detecta cores LEGO no frame"""
+        height, width = frame.shape[:2]
+        if width > RESOLUTION_WIDTH:
+            scale = RESOLUTION_WIDTH / width
+            frame = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        
+        blurred = cv2.GaussianBlur(frame, (5, 5), 0)
+        hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+        
+        detected_colors = []
+        areas = []  # Lista para armazenar as áreas das cores detectadas
+        
+        for color_name, (lower, upper) in self.colors.items():
+            lower = np.array(lower)
+            upper = np.array(upper)
+            
+            mask = cv2.inRange(hsv, lower, upper)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, self.kernel)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self.kernel)
+            
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                if area > self.min_area:
+                    (x, y), radius = cv2.minEnclosingCircle(cnt)
+                    center = (int(x), int(y))
+                    radius = int(radius)
+                    
+                    color_display = color_name.replace("2", "")
+                    cv2.circle(frame, center, radius, (0, 255, 0), 2)
+                    cv2.putText(frame, color_display, 
+                              (center[0] - 30, center[1] - radius - 10),
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                    
+                    detected_colors.append(f"Cor:{color_display}")
+                    areas.append((color_display, area))  # Adiciona a cor e sua área
+
+        # Agora, escolhemos a cor com a maior área
+        if areas:
+            predominant_color = max(areas, key=lambda item: item[1])[0]
+            return frame, [predominant_color]
+        
+        return frame, []
+
     def __init__(self):
         self.colors = {
             "Vermelho": ([0, 120, 70], [10, 255, 255]),
@@ -437,8 +826,6 @@ class CameraStream:
     
     def generate_frames(self):
         """Gerador de frames para streaming"""
-        frame_count = 0
-        
         while self.running:
             ret, frame = self.cap.read()
             if not ret:
@@ -448,7 +835,8 @@ class CameraStream:
             
             processed_frame, detected_colors = self.detector.detect(frame)
             
-            frame_count += 1
+            # Armazena último frame para captura
+            self.system_state.ultimo_frame = processed_frame.copy()
             
             # Adiciona informações no frame
             status_esteira = "ON" if self.system_state.esteira_ligada else "OFF"
@@ -472,9 +860,20 @@ class CameraStream:
             self.cap.release()
 
 # ==============================
-# FLASK APP
+# FLASK APP COM CORS
 # ==============================
 app = Flask(__name__)
+
+# Configurar CORS
+CORS(app, resources={
+    r"/*": {
+        "origins": ["*"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Accept"],
+        "max_age": 3600
+    }
+})
+
 system_state = SystemState()
 gpio_controller = GPIOController()
 lcd_controller = LCDController()
@@ -484,13 +883,36 @@ camera_stream = None
 @app.route("/camera_ia")
 def camera_ia():
     """Endpoint de streaming com IA"""
+    if not camera_stream or not camera_stream.running:
+        return jsonify({"error": "Camera not running"}), 503
+    
     return Response(camera_stream.generate_frames(),
                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route("/camera_ia")
+@app.route("/camera_ia/capture")
+def capture_frame():
+    """Captura um frame individual em JPEG"""
+    if not system_state.ultimo_frame is None:
+        ret, buffer = cv2.imencode('.jpg', system_state.ultimo_frame, 
+                                  [cv2.IMWRITE_JPEG_QUALITY, 95])
+        frame_bytes = buffer.tobytes()
+        
+        return Response(frame_bytes, 
+                       mimetype='image/jpeg',
+                       headers={
+                           'Content-Type': 'image/jpeg',
+                           'Cache-Control': 'no-cache, no-store, must-revalidate',
+                           'Pragma': 'no-cache',
+                           'Expires': '0'
+                       })
+    
+    return jsonify({"error": "No frame available"}), 503
 
 @app.route("/status")
 def status():
     """Endpoint de status do sistema"""
-    return {
+    return jsonify({
         "mqtt_connected": mqtt_handler.connected,
         "camera_running": camera_stream.running if camera_stream else False,
         "ip": get_local_ip(),
@@ -499,7 +921,23 @@ def status():
         "ultima_cor": system_state.ultima_cor_detectada,
         "gpio_disponivel": gpio_controller.gpio_disponivel,
         "lcd_disponivel": lcd_controller.lcd_disponivel
-    }
+    })
+
+@app.route("/health")
+def health():
+    """Health check"""
+    return jsonify({"status": "ok"}), 200
+
+@app.before_request
+def handle_preflight():
+    """Handle CORS preflight requests"""
+    from flask import request
+    if request.method == "OPTIONS":
+        response = jsonify({"status": "ok"})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type,Accept")
+        response.headers.add("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        return response
 
 # ==============================
 # MAIN
@@ -534,6 +972,7 @@ if __name__ == "__main__":
     print("\n" + "=" * 50)
     print(f"✅ SISTEMA PRONTO!")
     print(f"📹 Acessar câmera IA: http://{ip}:5000/camera_ia")
+    print(f"📸 Capturar frame: http://{ip}:5000/camera_ia/capture")
     print(f"📊 Status do sistema: http://{ip}:5000/status")
     print(f"📡 MQTT Status: {'Conectado' if mqtt_handler.connected else 'Desconectado'}")
     print(f"📡 Tópico de cores e IP: {MQTT_TOPIC}")

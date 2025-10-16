@@ -1,13 +1,18 @@
 import { Image } from 'expo-image';
-import { StyleSheet, Text, View } from "react-native";
-const img = require('@/assets/images/ctiLogo.png');
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+const img_cti = require('@/assets/images/ctiLogo.png');
+const img_feb = require('@/assets/images/feb.png');
 
 export default function Sobre() {
   return (
-    <View style={styles.container}>
-      <Image source={img} style={styles.imagem}/>
+    <ScrollView>
+      <View style={styles.container}>
+      <Image source={img_cti} style={styles.imagem}/>
       <Text style={styles.texto}>O Colégio Técnico Industrial Professor Isaac Portal Roldán é uma instituição de ensino médio e técnico pública estadual brasileira, com sede em Bauru, em São Paulo. O colégio técnico é mantido pela Universidade Estadual Paulista Júlio de Mesquita Filho e está vinculado à Faculdade de Engenharia de Bauru. </Text>
-    </View>
+      <Image source={img_feb} style={styles.imagem}/>
+      <Text style={styles.texto}>A Faculdade de Engenharia de Bauru (FE ou FEB, como é mais conhecida) é uma das 38 Unidades Universitárias que compõem a Universidade Estadual Paulista “Júlio de Mesquita Filho”, uma das três universidades públicas do Estado de São Paulo.</Text>
+      </View>
+    </ScrollView>
   );
 }
 const styles = StyleSheet.create({
@@ -15,7 +20,7 @@ const styles = StyleSheet.create({
     padding:20,
     flex: 1,
     backgroundColor: "#fff",
-    justifyContent: "top",
+    // justifyContent: "top",
     alignItems: "center",
   },
   text: {
@@ -53,9 +58,10 @@ const styles = StyleSheet.create({
   },
 
   imagem: {
-    width: 225,
+    width: 150,
     height: 95,
     margin: 30,
+    resizeMode: 'contain',
   }
 });
 

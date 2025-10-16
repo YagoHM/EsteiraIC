@@ -1,28 +1,51 @@
+import MqttPainel from "@/components/mqttPainel";
+import { informacoesMqtt } from "@/hooks/useMqtt";
+import useGeneratePdf from "@/hooks/usePdf";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
-// @ts-ignore
-import MqttPainel from "@/components/mqttPainel";
-import { informacoesMqtt } from "@/hooks/useMqtt";
-import useGeneratePdf from "@/hooks/usePdf";
 import { WebView } from "react-native-webview";
 
-export default function CameraScreen() {
+type SavedImage = {
+  id: string;
+  uri: string;
+  timestamp: number;
+  type: "editor" | "camera";
+  specs?: {
+    serialNumber: string;
+    category: string;
+    specifications: string;
+    problems: string;
+    captureTime: string;
+  };
+};
+
+export default function Index() {
   const PADRAO_IP = "http://10.153.0.116:5000";
 
   const [ip, setIp] = useState(PADRAO_IP);
   const [start, setStart] = useState(false);
   const [solicitandoIp, setSolicitandoIp] = useState(false);
+  const [showSpecsModal, setShowSpecsModal] = useState(false);
+  const [capturedImageUri, setCapturedImageUri] = useState<string>("");
+  const [capturandoImagem, setCapturandoImagem] = useState(false);
+  
+  const [serialNumber, setSerialNumber] = useState("");
+  const [category, setCategory] = useState("");
+  const [specifications, setSpecifications] = useState("");
+  const [problems, setProblems] = useState("");
 
   const isWeb = Platform.OS === "web";
   const { width } = Dimensions.get("window");
@@ -48,19 +71,14 @@ export default function CameraScreen() {
     corndef
   );
 
-  // Formata IP adicionando http:// se necessário
   const formatarIp = (ipInput: string) => {
     let formatted = ipInput.trim();
-    
-    // Adiciona http:// se não tiver protocolo
     if (!formatted.startsWith("http://") && !formatted.startsWith("https://")) {
       formatted = "http://" + formatted;
     }
-    
     return formatted;
   };
 
-  // Solicita IP via MQTT
   const solicitarIpViaMqtt = () => {
     if (!client || !client.connected) {
       Alert.alert(
@@ -71,39 +89,20 @@ export default function CameraScreen() {
     }
 
     setSolicitandoIp(true);
-
-    // Subscreve ao tópico de resposta
     const ENVIAR_IP_TOPIC = "dados/enviar_ip";
     const SOLICITAR_IP_TOPIC = "dados/solicitar_ip";
     
-    console.log("[MQTT] Iniciando solicitação de IP...");
-    console.log("[MQTT] Inscrevendo em:", ENVIAR_IP_TOPIC);
-    
-    // Variável para controlar o timeout
     let timeoutId: NodeJS.Timeout;
-    
     const handleMessage = (topic: string, message: any) => {
-      // Converte message para string
       const payload = typeof message === 'string' ? message : message.toString();
       
-      console.log("[MQTT] Mensagem recebida:");
-      console.log("[MQTT] - Tópico:", topic);
-      console.log("[MQTT] - Payload:", payload);
-      
       if (topic === ENVIAR_IP_TOPIC) {
-        console.log("[MQTT] ✓ IP recebido:", payload);
-        
         clearTimeout(timeoutId);
         setIp(payload);
         setSolicitandoIp(false);
         
-        Alert.alert(
-          "Sucesso",
-          `IP configurado automaticamente:\n${payload}`,
-          [{ text: "OK" }]
-        );
+        Alert.alert("Sucesso", `IP configurado automaticamente:\n${payload}`, [{ text: "OK" }]);
         
-        // Remove o listener
         try {
           client.removeListener("message", handleMessage);
           client.unsubscribe(ENVIAR_IP_TOPIC);
@@ -113,37 +112,25 @@ export default function CameraScreen() {
       }
     };
 
-    // Adiciona listener
     client.on("message", handleMessage);
-    
-    // Subscreve ao tópico de resposta
     client.subscribe(ENVIAR_IP_TOPIC, { qos: 1 }, (err: any) => {
       if (err) {
-        console.log("[MQTT] Erro ao subscrever:", err);
         setSolicitandoIp(false);
         Alert.alert("Erro", "Erro ao subscrever ao tópico MQTT");
         return;
       }
       
-      console.log("[MQTT] ✓ Inscrito em:", ENVIAR_IP_TOPIC);
-      
-      // Publica solicitação
-      console.log("[MQTT] Publicando solicitação em:", SOLICITAR_IP_TOPIC);
       client.publish(SOLICITAR_IP_TOPIC, "request_ip", { qos: 1 }, (err: any) => {
         if (err) {
-          console.log("[MQTT] Erro ao publicar:", err);
           setSolicitandoIp(false);
           Alert.alert("Erro", "Erro ao enviar solicitação");
           client.removeListener("message", handleMessage);
           return;
         }
-        console.log("[MQTT] ✓ Solicitação enviada!");
       });
     });
 
-    // Timeout de 15 segundos
     timeoutId = setTimeout(() => {
-      console.log("[MQTT] Timeout atingido");
       setSolicitandoIp(false);
       try {
         client.removeListener("message", handleMessage);
@@ -163,13 +150,143 @@ export default function CameraScreen() {
       Alert.alert("Erro", "Digite um endereço IP válido");
       return;
     }
-    
     const ipFormatado = formatarIp(ip);
     setIp(ipFormatado);
     setStart(true);
   };
 
-  // URL da câmera (sempre usa IA agora)
+  const captureImage = async () => {
+    try {
+      setCapturandoImagem(true);
+      const timestamp = Date.now();
+      const captureUrl = `${ip}/camera_ia/capture?t=${timestamp}`;
+      
+      console.log("[CAMERA] Iniciando captura de:", captureUrl);
+      
+      const response = await fetch(captureUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'image/jpeg, image/png, image/*',
+        }
+      });
+      
+      console.log("[CAMERA] Status:", response.status);
+      
+      if (!response.ok) {
+        throw new Error(`Erro HTTP ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      console.log("[CAMERA] Blob recebido:", blob.size, "bytes");
+      
+      if (blob.size === 0) {
+        throw new Error("Imagem vazia recebida do servidor");
+      }
+      
+      const reader = new FileReader();
+      
+      reader.onload = () => {
+        const base64String = reader.result as string;
+        console.log("[CAMERA] Imagem convertida para base64");
+        
+        setCapturedImageUri(base64String);
+        setShowSpecsModal(true);
+        setCapturandoImagem(false);
+        
+        Alert.alert("Sucesso", "Imagem capturada!");
+      };
+      
+      reader.onerror = () => {
+        console.error("[CAMERA] Erro ao ler arquivo");
+        setCapturandoImagem(false);
+        Alert.alert("Erro", "Falha ao processar imagem");
+      };
+      
+      reader.readAsDataURL(blob);
+      
+    } catch (error) {
+      console.error("[CAMERA] Erro:", error);
+      setCapturandoImagem(false);
+      
+      const msg = error instanceof Error ? error.message : String(error);
+      Alert.alert(
+        "Erro ao Capturar",
+        `${msg}\n\nVerifique:\n• URL: ${ip}/camera_ia/capture\n• Servidor rodando\n• Câmera conectada`
+      );
+    }
+  };
+
+  const saveImageWithSpecs = async () => {
+    if (!serialNumber.trim()) {
+      Alert.alert("Atenção", "Por favor, preencha o número de série.");
+      return;
+    }
+
+    try {
+      const now = new Date();
+      const captureTime = now.toLocaleString("pt-BR");
+
+      const newImage: SavedImage = {
+        id: Date.now().toString(),
+        uri: capturedImageUri,
+        timestamp: Date.now(),
+        type: "camera",
+        specs: {
+          serialNumber: serialNumber.trim(),
+          category: category.trim() || "Sem categoria",
+          specifications: specifications.trim() || "Não especificado",
+          problems: problems.trim() || "Nenhum",
+          captureTime,
+        },
+      };
+
+      if (Platform.OS === "web") {
+        const DB_NAME = "StickerAppDB";
+        const STORE_NAME = "images";
+        
+        const initDB = (): Promise<IDBDatabase> => {
+          return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, 1);
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => resolve(request.result);
+            request.onupgradeneeded = (event) => {
+              const db = (event.target as IDBOpenDBRequest).result;
+              if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: "id" });
+              }
+            };
+          });
+        };
+
+        const db = await initDB();
+        const transaction = db.transaction([STORE_NAME], "readwrite");
+        const store = transaction.objectStore(STORE_NAME);
+        await new Promise((resolve, reject) => {
+          const request = store.put(newImage);
+          request.onsuccess = () => resolve(undefined);
+          request.onerror = () => reject(request.error);
+        });
+      } else {
+        const stored = await AsyncStorage.getItem("saved_images");
+        const images = stored ? JSON.parse(stored) : [];
+        images.push(newImage);
+        await AsyncStorage.setItem("saved_images", JSON.stringify(images));
+      }
+
+      setSerialNumber("");
+      setCategory("");
+      setSpecifications("");
+      setProblems("");
+      setShowSpecsModal(false);
+      setCapturedImageUri("");
+
+      Alert.alert("Sucesso", "Imagem salva na galeria!", [{ text: "OK" }]);
+    } catch (error) {
+      console.error("Erro ao salvar imagem:", error);
+      Alert.alert("Erro", "Não foi possível salvar a imagem.");
+    }
+  };
+
   const cameraUrl = `${ip}/camera_ia`;
 
   return (
@@ -179,12 +296,10 @@ export default function CameraScreen() {
       showsVerticalScrollIndicator={true}
     >
       <View style={styles.container}>
-        {/* Painel MQTT */}
         <View style={styles.mqttContainer}>
           <MqttPainel />
         </View>
 
-        {/* Estatísticas de Cores */}
         <View style={styles.statsContainer}>
           <View style={styles.statsRow}>
             <View style={[styles.statBox, { backgroundColor: "#e53935" }]}>
@@ -206,7 +321,6 @@ export default function CameraScreen() {
           </View>
         </View>
 
-        {/* Botão Gerar PDF */}
         <TouchableOpacity
           style={[styles.pdfButton, pdfLoading && styles.buttonDisabled]}
           onPress={gerarPdf}
@@ -232,7 +346,6 @@ export default function CameraScreen() {
               autoCorrect={false}
             />
 
-            {/* Botão Conectar */}
             <TouchableOpacity
               style={[styles.button, styles.connectButton, !ip && styles.buttonDisabled]}
               disabled={!ip}
@@ -241,7 +354,6 @@ export default function CameraScreen() {
               <Text style={styles.buttonText}>Conectar</Text>
             </TouchableOpacity>
 
-            {/* Botão Solicitar IP via MQTT */}
             <TouchableOpacity
               style={[styles.button, styles.mqttButton, solicitandoIp && styles.buttonDisabled]}
               disabled={solicitandoIp}
@@ -259,7 +371,6 @@ export default function CameraScreen() {
               )}
             </TouchableOpacity>
 
-            {/* Informações */}
             <View style={styles.infoBox}>
               <Text style={styles.infoTitle}>Instruções:</Text>
               <Text style={styles.infoText}>
@@ -271,13 +382,11 @@ export default function CameraScreen() {
           </View>
         ) : (
           <View style={styles.streamContainer}>
-            {/* Título da Stream */}
             <View style={styles.streamHeader}>
               <Text style={styles.streamTitle}>Detecção de Cores em Tempo Real</Text>
               <Text style={styles.streamSubtitle}>{ip}/camera_ia</Text>
             </View>
 
-            {/* WebView da Câmera */}
             <View style={styles.webviewWrapper}>
               {isWeb ? (
                 <iframe
@@ -299,7 +408,16 @@ export default function CameraScreen() {
               )}
             </View>
 
-            {/* Botão Voltar */}
+            <TouchableOpacity
+              style={[styles.button, styles.captureButton, capturandoImagem && styles.buttonDisabled]}
+              onPress={captureImage}
+              disabled={capturandoImagem}
+            >
+              <Text style={styles.buttonText}>
+                {capturandoImagem ? "Capturando..." : "📸 Capturar Imagem"}
+              </Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[styles.button, styles.backButton]}
               onPress={() => setStart(false)}
@@ -308,12 +426,95 @@ export default function CameraScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        <Modal
+          visible={showSpecsModal}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowSpecsModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Especificações da Imagem</Text>
+              
+              <ScrollView style={styles.modalScroll}>
+                <Text style={styles.modalLabel}>Número de Série *</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Ex: SN-2025-001"
+                  placeholderTextColor="#999"
+                  value={serialNumber}
+                  onChangeText={setSerialNumber}
+                />
+
+                <Text style={styles.modalLabel}>Categoria</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Ex: Eletrônicos, Peças, etc."
+                  placeholderTextColor="#999"
+                  value={category}
+                  onChangeText={setCategory}
+                />
+
+                <Text style={styles.modalLabel}>Especificações</Text>
+                <TextInput
+                  style={[styles.modalInput, styles.modalTextArea]}
+                  placeholder="Descreva as especificações..."
+                  placeholderTextColor="#999"
+                  value={specifications}
+                  onChangeText={setSpecifications}
+                  multiline
+                  numberOfLines={3}
+                />
+
+                <Text style={styles.modalLabel}>Problemas Identificados</Text>
+                <TextInput
+                  style={[styles.modalInput, styles.modalTextArea]}
+                  placeholder="Descreva os problemas..."
+                  placeholderTextColor="#999"
+                  value={problems}
+                  onChangeText={setProblems}
+                  multiline
+                  numberOfLines={3}
+                />
+
+                <Text style={styles.modalInfo}>
+                  * Campos obrigatórios{"\n"}
+                  Hora da captura será salva automaticamente
+                </Text>
+              </ScrollView>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => {
+                    setShowSpecsModal(false);
+                    setSerialNumber("");
+                    setCategory("");
+                    setSpecifications("");
+                    setProblems("");
+                    setCapturedImageUri("");
+                  }}
+                >
+                  <Text style={styles.modalButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.modalButtonSave]}
+                  onPress={saveImageWithSpecs}
+                >
+                  <Text style={styles.modalButtonText}>Salvar na Galeria</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </ScrollView>
   );
 }
 
-const { width } = Dimensions.get("window");
+const { width: screenWidth } = Dimensions.get("window");
 
 const styles = StyleSheet.create({
   scrollView: {
@@ -440,9 +641,13 @@ const styles = StyleSheet.create({
   mqttButton: {
     backgroundColor: "#0288d1",
   },
+  captureButton: {
+    backgroundColor: "#7b1fa2",
+    marginTop: 15,
+  },
   backButton: {
     backgroundColor: "#d32f2f",
-    marginTop: 15,
+    marginTop: 5,
   },
   buttonDisabled: {
     backgroundColor: "#bdbdbd",
@@ -522,15 +727,89 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   webview: {
-    width: Math.min(width - 40, 800),
-    height: Math.min((width - 40) * 0.75, 600),
+    width: Math.min(screenWidth - 40, 800),
+    height: Math.min((screenWidth - 40) * 0.75, 600),
     backgroundColor: "#000",
   },
   webviewIframe: {
-    width: Math.min(width - 40, 800),
-    height: Math.min((width - 40) * 0.75, 600),
+    width: Math.min(screenWidth - 40, 800),
+    height: Math.min((screenWidth - 40) * 0.75, 600),
     border: "none",
     display: "block",
     backgroundColor: "#000",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 25,
+    width: "100%",
+    maxWidth: 500,
+    maxHeight: "90%",
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#212529",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  modalScroll: {
+    maxHeight: 400,
+  },
+  modalLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#495057",
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: "#ced4da",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: "#f8f9fa",
+    color: "#212529",
+  },
+  modalTextArea: {
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  modalInfo: {
+    fontSize: 12,
+    color: "#6c757d",
+    marginTop: 15,
+    fontStyle: "italic",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 20,
+    gap: 10,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 15,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  modalButtonCancel: {
+    backgroundColor: "#6c757d",
+  },
+  modalButtonSave: {
+    backgroundColor: "#2e7d32",
+  },
+  modalButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

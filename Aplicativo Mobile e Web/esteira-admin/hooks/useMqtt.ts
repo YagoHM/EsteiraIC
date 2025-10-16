@@ -19,7 +19,8 @@ export function informacoesMqtt(topicoPadraoReceber: string = 'dados/camera', to
   const [topicoMsgEnviar, setTopicoMsgEnviar] = useState(topicoPadraoEnviar);
 
 
-  useEffect(() => {
+useEffect(() => {
+  const connectMqtt = async () => {
     const clientId = 'expo_' + Math.random().toString(16).substr(2, 8);
     const mqttClient = new Client(
       'wss://f36a296472af4ff7bc783d027dcf8cb2.s1.eu.hivemq.cloud:8884/mqtt',
@@ -51,8 +52,21 @@ export function informacoesMqtt(topicoPadraoReceber: string = 'dados/camera', to
       else if (p === 'Cor:CorNDef') setCorNDef(v => v + 1);
     };
 
-    return () => mqttClient.disconnect();
-  }, [topicoMsgReceber]);
+    return mqttClient;
+  };
+
+  let mqttClient: Client | null = null;
+
+  connectMqtt().then(client => {
+    mqttClient = client;
+  });
+
+  return () => {
+    if (mqttClient) {
+      mqttClient.disconnect();
+    }
+  };
+}, [topicoMsgReceber]);
 
   const alterarEstadoEsteira = () => {
     if (!client) return;
@@ -69,15 +83,26 @@ export function informacoesMqtt(topicoPadraoReceber: string = 'dados/camera', to
 
     setTimeout(() => {
       setEstado(novoEstado);
-      setLigarDesligarEstado(topicoMsgEnviar);
+      setLigarDesligarEstado(novoTextoBotao);
     }, 500);
   };
 
   const ngrokRefresh = () => {
-    const msg = new Message("Refresh");
+
+  }
+
+  const refreshCor = () => {
+    setAzul(0);
+    setVermelho(0);
+    setVerde(0);
+    setCorNDef(0);
+
+    const msg = new Message('Cor:Refresh');
     msg.destinationName = topicoMsgEnviar;
-    client.send(msg);
-  };
+    client?.send(msg);
+  }
+
+
 
   const arrayBufferToBase64 = (buffer: Uint8Array) => {
     let binary = '';

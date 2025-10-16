@@ -53,7 +53,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="editar_foto"
         options={{
-          title: 'Editor de Fotos',
+          title: 'Fotos',
           tabBarIcon: ({ color }) => <IconSymbol size={16} name="square.and.pencil" color={color} />,
         }}
       />
